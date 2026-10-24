@@ -14,6 +14,8 @@ Post-storm grid triage with five line-riding sensor packages (EHL hackathon, syn
 python3 -I build.py /path/to/participant_package
 open index.html
 ```
+**Full system reference (algorithms, files, inputs/outputs, config): [docs/SYSTEM.md](docs/SYSTEM.md).**
+
 - `common/`: generic input layer (`grid_io.py`) and every assumption of the system (`config.json`); nothing is tied to one dataset.
 - `placement/`: placement of K bases with radius R on any grid (coverage, seasonal risk, maps); see `placement/README.md`.
 - `response/`: what happens after each drone reading (Bayesian search, flight/charge limits) and when to recommend inspection or repair; see `response/README.md`.
