@@ -217,22 +217,26 @@ function sideFleet(u) {
   const best = rows.reduce((a, b) => b.net > a.net ? b : a), H = 210, Wb = 46;
   const y = v => H - (v - mn) / (mx - mn) * H;
   const bars = rows.map((r, i) => { const show = clamp(u * rows.length * 1.3 - i);
-    const x = 10 + i * (Wb + 8), chosen = r.k === D.fleet.k;
-    return `<rect x="${x}" y="${Math.min(y(r.net * show), y(0))}" width="${Wb}" height="${Math.abs(y(r.net * show) - y(0))}" rx="5" fill="${chosen ? "#3987e5" : "#2b323d"}"/>
+    const x = 10 + i * (Wb + 8), chosen = r.k === D.fleet.k, rec = r.k === D.fleet.recommended;
+    return `<rect x="${x}" y="${Math.min(y(r.net * show), y(0))}" width="${Wb}" height="${Math.abs(y(r.net * show) - y(0))}" rx="5" fill="${chosen ? "#3987e5" : rec ? "#5b6b82" : "#2b323d"}"/>
       <line x1="${x + Wb / 2}" x2="${x + Wb / 2}" y1="${y((r.net + r.se) * show)}" y2="${y((r.net - r.se) * show)}" stroke="#6d727b" stroke-width="2"/>
       <text x="${x + Wb / 2}" y="${H + 22}" text-anchor="middle" font-size="15" fill="${chosen ? "#f2f1ee" : "#6d727b"}" font-weight="${chosen ? 800 : 500}">${r.k}</text>`; }).join("");
   const band = u > .8 ? `<rect x="6" width="${rows.length * (Wb + 8) + 4}" y="${y(best.net)}" height="${y(best.net - best.se) - y(best.net)}" fill="rgba(57,135,229,.12)"/>` : "";
-  return header("Step 4 · Before launch", "How many drones?", "For each fleet size K: place bases, simulate 100 storms, value = faults found × consequence × outage cost − drone cost.") +
+  return header("Step 4 · Before launch", "Five packages — enough?", "The brief gives five packages. A sizing check simulates 100 storms per fleet size K: value = faults found × consequence × outage cost − package cost.") +
   `<div class="cards"><div class="card"><div class="h">Net value per event (± 1 SE) vs K</div>
   <svg viewBox="0 0 ${10 + rows.length * (Wb + 8)} ${H + 30}" style="width:100%;height:250px">${band}<line x1="0" x2="1000" y1="${y(0)}" y2="${y(0)}" stroke="#3a404a"/>${bars}</svg></div>
-  <div class="card" style="opacity:${clamp((u - .75) * 5)}"><div class="h">Decision · one-standard-error rule</div><div class="big">K = ${D.fleet.k}<small>smallest K within 1 SE of the best (K = ${best.k})</small></div></div></div>`;
+  <div class="card" style="opacity:${clamp((u - .75) * 5)}"><div class="h">Used in this example</div><div class="big">K = ${D.fleet.k}<small>as given in the brief</small></div>
+  <div style="font-size:17px;color:var(--t2);margin-top:6px">Sizing check (one-standard-error rule): <b style="color:var(--t1)">${D.fleet.recommended}</b> packages would already be within 1 SE of the best (K = ${best.k}) — five leave margin for unclear readings and a dead line.</div></div></div>`;
 }
 function sideBases() {
   return header("Step 5 · Before launch", `${D.bases.length} bases, ${R} km radius`, "Maximal covering location on live lines (greedy + swaps), then pulled closer to the risk (p-median) so more of every sortie is spent inspecting.") +
   `<div class="cards"><div class="row"><div class="card"><div class="h">Line covered</div><div class="big">${(D.coverage * 100).toFixed(0)}%</div></div>
-  <div class="card"><div class="h">Sortie</div><div class="big">${L.flight_min}<small>min · ≤ 8 km inspected</small></div></div>
-  <div class="card"><div class="h">Charge</div><div class="big">${L.charge_h}<small>h · on a live line</small></div></div></div>
-  <div class="card"><div class="h">Bases</div>${D.bases.map((b, i) => `<div class="mono" style="font-size:16px;padding:3px 0">B${i + 1} &nbsp; ${b[1].toFixed(4)}, ${b[0].toFixed(4)}</div>`).join("")}</div></div>`;
+  <div class="card"><div class="h">Sortie</div><div class="big">${L.flight_min}<small>min</small></div></div>
+  <div class="card"><div class="h">Charge</div><div class="big">${L.charge_h}<small>h · live line</small></div></div></div>
+  <div class="card"><div class="h">Start positions · sits on line · nearest node · first priorities</div>
+  ${D.starts.map(s => `<div style="display:grid;grid-template-columns:44px 104px 1fr;gap:8px;font-size:15.5px;padding:5px 0;border-top:1px solid var(--border)">
+    <b>${s.base}</b><span class="mono">${s.line}</span><span style="color:var(--t2)"><span class="mono" style="color:var(--t1)">${s.node}</span>${s.node_name ? " · " + s.node_name : ""} · ${s.node_km.toFixed(1)} km<br>
+    <span style="font-size:14px">→ ${s.priority_lines.join(", ")}</span></span></div>`).join("")}</div></div>`;
 }
 function sideMission(m, st) {
   const done = reads.filter(r => r.t <= m), last = done[done.length - 1];
@@ -244,7 +248,7 @@ function sideMission(m, st) {
     const o0 = last.p_before / (1 - last.p_before), o1 = last.p_after / (1 - last.p_after);
     const cls = { repair: "p-repair", "physical inspection": "p-inspect", cleared: "p-clear" }[last.status] || "p-more";
     const rc = { strong: "p-strong", weak: "p-weak", unclear: "p-unclear", clear: "p-clearr" }[last.reading];
-    focus = `<div class="card"><div class="h">${last.drone} · ${last.id} · ${last.channel}</div>
+    focus = `<div class="card"><div class="h">${last.drone} · ${last.id} · ${last.channel} · <span style="color:#f2b33d">hypothetical reading</span></div>
     <div style="font-size:19px;margin-bottom:8px">reading <span class="pill ${rc}">${last.reading.toUpperCase()}</span></div>
     <div class="eq">odds ${o0.toFixed(3)} <span class="o">×</span> LR ${LR[last.reading].toFixed(2)} <span class="o">=</span> ${o1.toFixed(3)}<br>
     P <span class="v">${fmtP(last.p_before)} → ${fmtP(last.p_after)}</span></div>
@@ -254,7 +258,7 @@ function sideMission(m, st) {
   const ev = done.filter(r => r.reading !== "clear" || r.status !== "cleared").slice(-5).reverse().map(r => {
     const cls = { repair: "p-repair", "physical inspection": "p-inspect", cleared: "p-clear" }[r.status] || "p-more";
     return `<div class="e"><b style="color:${DRONE_COL[r.di]}">${r.drone}</b><span class="mono">${r.id}</span>${r.reading}<span style="margin-left:auto" class="pill ${cls}">${r.status === "physical inspection" ? "INSPECT" : r.status.toUpperCase()}</span></div>`; }).join("");
-  return header("Step 6 · Mission", "Bayesian search", "Every pass updates the odds. A finding pulls the next drone back with another sensor; nothing found lowers P and the search moves on.") +
+  return header("Step 6 · Mission · hypothetical observations", "Bayesian search", "Every pass updates the odds. A finding pulls the next drone back with another sensor; nothing found lowers P and the search moves on.") +
   `<div class="cards"><div class="row"><div class="card"><div class="h">Sorties</div><div class="big">${sortiesFlown}</div></div>
   <div class="card"><div class="h">Cells read</div><div class="big">${km}</div></div><div class="card"><div class="h">Crew calls</div><div class="big">${calls}</div></div></div>
   ${focus}<div class="log">${ev}</div></div>`;
@@ -267,8 +271,9 @@ function sideOutcome(st) {
   `<div class="cards"><div class="row"><div class="card"><div class="h">Repair</div><div class="big" style="color:var(--repair)">${rep.length}</div><div class="mono" style="font-size:14px;color:var(--t2)">${rep.join(", ")}</div></div>
   <div class="card"><div class="h">Inspect</div><div class="big" style="color:var(--inspect)">${ins.length}</div><div class="mono" style="font-size:14px;color:var(--t2)">${ins.join(", ")}</div></div></div>
   <div class="row"><div class="card"><div class="h">Cleared</div><div class="big" style="color:var(--clear)">${clr.length}</div></div><div class="card"><div class="h">Need evidence</div><div class="big">${more.length}</div></div></div>
-  <div class="card"><div class="h">Simulated ground truth</div><div style="font-size:18px">${D.truth.length} hidden faults · <b>${found.length}</b> sent to a crew · every crew call was a real fault: <b>${(rep.length + ins.length) === found.length ? "yes" : "no"}</b></div></div>
-  <div class="note">Over 200 simulated storms: 96–100% of crew calls are real faults. The bottleneck is charging: a 15-min battery swap lifts faults found in 4 h from 7% to 49%.</div></div>`;
+  <div class="card"><div class="h">Hypothetical ground truth (simulation)</div><div style="font-size:18px">${D.truth.length} hidden faults · <b>${found.length}</b> sent to a crew · every crew call was a real fault: <b>${(rep.length + ins.length) === found.length ? "yes" : "no"}</b></div></div>
+  <div class="note">All faults and readings here are hypothetical. Over 200 simulated storms per grid, crew calls are real faults 91–100% of the time if sensors behave as assumed,
+  56–88% if sensors give more false alarms and the risk model is wrong. Charging is the bottleneck: a 15-min battery swap lifts faults found in 4 h from 7% to 49%.</div></div>`;
 }
 
 // ---------- render(t): everything is a pure function of the animation clock ----------
@@ -302,11 +307,19 @@ function render(t) {
     o.dot.setAttribute("r", r.toFixed(1)); o.dot.setAttribute("fill", fill); o.dot.setAttribute("opacity", op.toFixed(2));
     o.dot.setAttribute("filter", (s.status === "repair" || s.status === "physical inspection") ? "url(#glow)" : "");
     const want = s.status === "repair" || s.status === "physical inspection";
-    if (want && !badgeEls[c.id]) { const g = el("g", {}, gFx); const lab = s.status === "repair" ? "REPAIR" : "INSPECT", w = lab.length * 10 + 18;
-      el("rect", { x: o.x + 16, y: o.y - 30, width: w, height: 26, rx: 13, fill: s.status === "repair" ? "var(--repair)" : "var(--inspect)" }, g);
-      const tx = el("text", { x: o.x + 16 + w / 2, y: o.y - 12, "text-anchor": "middle", "font-size": 14, "font-weight": 800, fill: "#0d0f12" }, g); tx.textContent = lab;
-      badgeEls[c.id] = g; }
-    if (!want && badgeEls[c.id]) { badgeEls[c.id].remove(); delete badgeEls[c.id]; } });
+    if (want && (!badgeEls[c.id] || badgeEls[c.id].kind !== s.status)) {
+      if (badgeEls[c.id]) badgeEls[c.id].g.remove();
+      const lab = (s.status === "repair" ? "REPAIR " : "INSPECT ") + c.id.split("#").pop().replace(/^/, "#"), w = lab.length * 9 + 20;
+      // stack badges so neighbouring cells never overlap
+      let bx = o.x + 16, by = o.y - 30;
+      const hits = () => Object.values(badgeEls).some(b => b.x < bx + w && bx < b.x + b.w && b.y < by + 26 && by < b.y + 26);
+      for (let k = 0; k < 8 && hits(); k++) by += 30;
+      const g = el("g", {}, gFx);
+      if (by !== o.y - 30) el("line", { x1: o.x, y1: o.y, x2: bx, y2: by + 13, stroke: "#6d727b", "stroke-width": 1.2 }, g);
+      el("rect", { x: bx, y: by, width: w, height: 26, rx: 13, fill: s.status === "repair" ? "var(--repair)" : "var(--inspect)" }, g);
+      const tx = el("text", { x: bx + w / 2, y: by + 18, "text-anchor": "middle", "font-size": 13.5, "font-weight": 800, fill: "#0d0f12" }, g); tx.textContent = lab;
+      badgeEls[c.id] = { g, x: bx, y: by, w, kind: s.status }; }
+    if (!want && badgeEls[c.id]) { badgeEls[c.id].g.remove(); delete badgeEls[c.id]; } });
   // bases and circles
   const bu = sceneU("bases");
   circleEls.forEach(o => o.ring.setAttribute("r", after("bases") ? R * S * ease(clamp(bu * 2 - o.i * .15)) : 0));

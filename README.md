@@ -15,6 +15,8 @@ Post-storm grid triage with five line-riding sensor packages (EHL hackathon, syn
 python3 -I build.py /path/to/participant_package
 open index.html
 ```
+**Challenge submission (problem, sensors, start positions, walkthrough, when to act, limits): [SUBMISSION.md](SUBMISSION.md).**
+
 **Full system reference (algorithms, files, inputs/outputs, config): [docs/SYSTEM.md](docs/SYSTEM.md).**
 
 - `common/`: generic input layer (`grid_io.py`) and every assumption of the system (`config.json`); nothing is tied to one dataset.

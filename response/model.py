@@ -178,12 +178,16 @@ def plan_sortie(drone, cells, cfg, t_h, value=default_value):
     return best
 
 
-def reading_for(cell, truth, pd, rng):
+def reading_for(cell, truth, pd, rng, sim=None):
+    """HYPOTHETICAL sensor: what a pass over the cell returns. `sim` (config sensors.sim) can make the
+    simulated sensor differ from what the model believes (stress tests); default = the believed sensor."""
+    sim = sim or {}
+    pd = sim.get("detect_prob", pd)
     if cell["id"] in truth:
-        if rng.random() < pd: return "strong" if rng.random() < 0.7 else "weak"
+        if rng.random() < pd: return "strong" if rng.random() < sim.get("strong_share", 0.7) else "weak"
         return "unclear" if rng.random() < 0.6 else "clear"
-    r = rng.random()
-    return "weak" if r < 0.06 else "unclear" if r < 0.14 else "clear"
+    r = rng.random(); fw = sim.get("false_weak", 0.06); fs = sim.get("false_strong", 0.0); fu = sim.get("false_unclear", 0.08)
+    return "strong" if r < fs else "weak" if r < fs + fw else "unclear" if r < fs + fw + fu else "clear"
 
 
 def apply_reading(cell, reading, pd, channel, cells, cfg):
@@ -226,7 +230,7 @@ def simulate(cells, bases, cfg, window_h, seed, log=print, value=default_value, 
             trace.append(rec)
         for c in run:
             ch = rng.choice(cfg["sensors"]["channels"])
-            reading = reading_for(c, truth, d["pd"], rng)
+            reading = reading_for(c, truth, d["pd"], rng, cfg["sensors"].get("sim"))
             nb_before = {n["id"]: n["p"] for n in cells if n["seg"] == c["seg"] and abs(n["k"] - c["k"]) == 1}
             before = apply_reading(c, reading, d["pd"], ch, cells, cfg)
             c["status"], why = decide(c, cfg)

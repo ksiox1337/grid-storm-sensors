@@ -91,11 +91,12 @@ def load_nodes(path, cfg, segs):
             pr = f.get("properties") or {}
             nid = pick(pr, sc["node_id"])
             if nid is not None:
-                nodes[str(nid)] = dict(type=str(pick(pr, sc["node_type"], "")).lower(), coords=tuple(f["geometry"]["coordinates"][:2]), degree=0)
+                nodes[str(nid)] = dict(type=str(pick(pr, sc["node_type"], "")).lower(), coords=tuple(f["geometry"]["coordinates"][:2]), degree=0,
+                                       name=pick(pr, ["name", "label"]))
     for s in segs:
         for end in (s["from_node"], s["to_node"]):
             if end is not None:
-                nodes.setdefault(str(end), dict(type="", coords=None, degree=0))["degree"] += 1
+                nodes.setdefault(str(end), dict(type="", coords=None, degree=0, name=None))["degree"] += 1
     return nodes
 
 

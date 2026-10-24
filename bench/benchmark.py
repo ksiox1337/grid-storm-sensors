@@ -196,11 +196,35 @@ def cfg_for(base_cfg, p):
     return cfg
 
 
+STRESS = {  # simulated sensor/world worse than the model believes (belief stays at config values)
+    "as believed": {},
+    "more false alarms (weak 15%, strong 2%)": {"sim": {"false_weak": 0.15, "false_strong": 0.02}},
+    "weaker detection (55%)": {"sim": {"detect_prob": 0.55}},
+    "both": {"sim": {"false_weak": 0.15, "false_strong": 0.02, "detect_prob": 0.55}},
+    "both + risk model wrong": {"sim": {"false_weak": 0.15, "false_strong": 0.02, "detect_prob": 0.55}, "truth": "uniform"},
+}
+
+
+def stress(maps, base_cfg, sims, k=5, r=15.0):
+    jobs, meta = [], []
+    for m, (title, data) in maps.items():
+        bases, cov = place(data, base_cfg, k, r)
+        for name, spec in STRESS.items():
+            cfg = copy.deepcopy(base_cfg)
+            if "sim" in spec: cfg["sensors"]["sim"] = spec["sim"]
+            p = dict(DEFAULT, k=k, r=r, charge_h=cfg["limits"]["charge_h"], pd=cfg["sensors"]["detect_prob"])
+            jobs.append((data, cfg, bases, p, "bayes", spec.get("truth", "prior"), sims)); meta.append((m, name))
+    with Pool() as pool:
+        res = pool.map(run_job, jobs, chunksize=1)
+    return [dict(map=m, case=n, **r) for (m, n), r in zip(meta, res)]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--package", help="challenge package folder (optional, added as a map)")
     ap.add_argument("--sims", type=int, default=200)
     ap.add_argument("--out", default=os.path.join(HERE, "out"))
+    ap.add_argument("--stress", action="store_true", help="only run the sensor/model stress test (K=5, R=15)")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     base_cfg = gio.load_config()
@@ -209,6 +233,14 @@ def main():
     for k, title in gen_maps(os.path.join(a.out, "maps_data")).items():
         maps[k] = (title, os.path.join(a.out, "maps_data", k))
     t0 = time.time()
+    if a.stress:
+        rows = stress(maps, base_cfg, a.sims)
+        json.dump(rows, open(os.path.join(a.out, "stress.json"), "w"), indent=1)
+        print(f"{'grid':16} {'case':42} {'found%':>7} {'crew precision':>15} {'false calls/event':>18}")
+        for r in rows:
+            calls = r["crew_calls"]; prec = 100 * (calls - r["false_calls"]) / calls if calls else float("nan")
+            print(f"{r['map']:16} {r['case']:42} {r['found_pct']:7.1f} {prec:14.0f}% {r['false_calls']:18.2f}")
+        print(f"done in {time.time()-t0:.0f}s"); return
     # placements needed: (map, K, R)
     need = {(m, DEFAULT["k"], DEFAULT["r"]) for m in maps} | {(m, k, DEFAULT["r"]) for m in maps for k in SWEEPS["k"]} | \
            {(m, DEFAULT["k"], r) for m in maps for r in SWEEPS["r"]}

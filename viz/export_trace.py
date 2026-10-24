@@ -23,6 +23,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True); ap.add_argument("--season", default="autumn")
     ap.add_argument("--seed", type=int); ap.add_argument("--fleet-sims", type=int, default=100)
+    ap.add_argument("--k", type=int, default=5, help="packages used in the example (the brief fixes five)")
     ap.add_argument("--out", default=os.path.join(HERE, "trace.json"))
     a = ap.parse_args()
     cfg = gio.load_config(); cfg["scenario"]["event_season"] = a.season
@@ -40,8 +41,22 @@ def main():
     from multiprocessing import Pool
     with Pool() as pool:
         best, rows = fleet.size_fleet(a.data, cfg, a.fleet_sims, pool=pool)
-    k = best["k"]; bases_ll, cover = bench.place(a.data, cfg, k, cfg["fleet"]["radius_km"])
+    k = a.k; bases_ll, cover = bench.place(a.data, cfg, k, cfg["fleet"]["radius_km"])
     bases = [fwd(*b) for b in bases_ll]
+    # starting positions expressed with dataset IDs: line the package sits on, nearest node, what it covers
+    starts = []
+    for i, b in enumerate(bases_ll):
+        bxy = fwd(*b)
+        seg = min(segs, key=lambda s: min(((fwd(*p)[0] - bxy[0]) ** 2 + (fwd(*p)[1] - bxy[1]) ** 2) for p in s["coords"]))
+        nid, nd = min(((k_, v) for k_, v in nodes.items() if v["coords"]), key=lambda kv: (fwd(*kv[1]["coords"])[0] - bxy[0]) ** 2 + (fwd(*kv[1]["coords"])[1] - bxy[1]) ** 2)
+        ndist = ((fwd(*nd["coords"])[0] - bxy[0]) ** 2 + (fwd(*nd["coords"])[1] - bxy[1]) ** 2) ** .5
+        near = [c for c in cells0 if ((c["xy"][0] - bxy[0]) ** 2 + (c["xy"][1] - bxy[1]) ** 2) ** .5 <= cfg["fleet"]["radius_km"]]
+        mine = [c for c in cells0 if min(range(len(bases)), key=lambda j: (c["xy"][0] - bases[j][0]) ** 2 + (c["xy"][1] - bases[j][1]) ** 2) == i]
+        by_line = {}
+        for c in mine: by_line[c["seg"]] = by_line.get(c["seg"], 0) + c["p0"] * c["cons"]
+        starts.append(dict(base=f"B{i+1}", lon=b[0], lat=b[1], line=seg["id"], line_kv=seg["kv"], node=nid, node_type=nd["type"],
+                           node_name=nd.get("name"), node_km=ndist, km_in_reach=sum(c["len"] for c in near),
+                           priority_lines=[s for s, _ in sorted(by_line.items(), key=lambda x: -x[1])[:3]]))
     # mission: pick the most instructive seed unless one is given
     seeds = [a.seed] if a.seed is not None else range(1, 60)
     best_run = None
@@ -63,14 +78,16 @@ def main():
                     imputed=s.get("imputed", {})) for s in segs],
         storm=scen["event_area"], reports=reports, imputation=imputed,
         cells=[dict(id=c["id"], seg=c["seg"], ll=c["ll"], p0=c["p0"], cons=c["cons"], why=c["why"]) for c in cells0],
-        fleet=dict(k=k, verdict=best["verdict"], rows=[dict(k=r["k"], net=r["net"], se=r["net_se"], found=r["found_pct"],
+        starts=starts,
+        fleet=dict(k=k, recommended=best["k"], verdict=best["verdict"], rows=[dict(k=r["k"], net=r["net"], se=r["net_se"], found=r["found_pct"],
                    coverage=r["coverage"], auc_post=r["auc_post"]) for r in rows]),
         bases=bases_ll, coverage=cover, trace=trace, truth=sorted(truth),
         final={c["id"]: dict(p=c["p"], status=c["status"]) for c in cells if c["obs"]},
         total_km=sum(s["length_km"] for s in segs))
     json.dump(out, open(a.out, "w"), default=float)
     st = [c["status"] for c in cells]
-    print(f"seed {seed}: K={k} ({best['verdict'][:60]}), sorties {len(trace)}, repair {st.count('repair')}, "
+    for s in starts: print(f"  {s['base']}: on {s['line']} ({s['line_kv']:.0f} kV), nearest node {s['node']} {s['node_name'] or ''} {s['node_km']:.1f} km; covers {s['priority_lines']}")
+    print(f"seed {seed}: K={k} (sizing would pick {best['k']}: {best['verdict'][:70]}), sorties {len(trace)}, repair {st.count('repair')}, "
           f"inspect {st.count('physical inspection')}, faults {len(truth)}; reports via {[r['backend'] for r in reports][:2]} -> {a.out}")
 
 
