@@ -133,6 +133,20 @@ def place(data, cfg, k, r):
 _CACHE = {}
 
 
+def auc(scores, labels):
+    """ROC AUC (Mann-Whitney): chance a faulty cell is ranked above a healthy one. Ties count half."""
+    s = np.asarray(scores, float); y = np.asarray(labels, bool)
+    npos, nneg = int(y.sum()), int((~y).sum())
+    if not npos or not nneg: return None
+    order = np.argsort(s, kind="mergesort"); ranks = np.empty(len(s)); sorted_s = s[order]
+    i = 0
+    while i < len(s):
+        j = i
+        while j + 1 < len(s) and sorted_s[j + 1] == sorted_s[i]: j += 1
+        ranks[order[i:j + 1]] = (i + j) / 2 + 1; i = j + 1
+    return float((ranks[y].sum() - npos * (npos + 1) / 2) / (npos * nneg))
+
+
 def run_job(job):
     data, cfg, bases_ll, p, strategy, truth_mode, n_sims = job
     key = (data, json.dumps(cfg, sort_keys=True))
@@ -146,6 +160,7 @@ def run_job(job):
         if any(o["reading"] in ("strong", "weak") for o in c["obs"]): return 2.0
         return 0.0 if c["obs"] else 1.0
     value = {"bayes": md.default_value, "patrol": lambda c: 0.0 if c["obs"] else 1.0, "patrol_confirm": patrol_confirm}[strategy]
+    s_prior, s_post, labels, per_event = [], [], [], []
     agg = dict(faults=0, found=0, cons_total=0.0, cons_found=0.0, rep=0, rep_ok=0, insp=0, insp_ok=0, km=0.0, sorties=0)
     for sd in range(n_sims):
         cells = copy.deepcopy(cells0); rng = random.Random(10_000 + sd)
@@ -155,12 +170,15 @@ def run_job(job):
             truth = {c["id"] for c in cells if rng.random() < 1 - math.exp(-mean_p * c["len"])}
         tr, drones = md.simulate(cells, bases, cfg, p["window_h"], sd, log=lambda s: None, value=value, truth=truth)
         byid = {c["id"]: c for c in cells}
+        before = agg["cons_found"]
         agg["faults"] += len(tr); agg["sorties"] += sum(dd["sorties"] for dd in drones)
         agg["km"] += sum(c["len"] for c in cells if c["obs"])
         for f in tr:
             c = byid[f]; agg["cons_total"] += c["cons"]
             if c["status"] in ("repair", "physical inspection"): agg["found"] += 1; agg["cons_found"] += c["cons"]
+        per_event.append(agg["cons_found"] - before)
         for c in cells:
+            s_prior.append(c["p0"]); s_post.append(c["p"]); labels.append(c["id"] in tr)
             if c["status"] == "repair": agg["rep"] += 1; agg["rep_ok"] += c["id"] in tr
             if c["status"] == "physical inspection": agg["insp"] += 1; agg["insp_ok"] += c["id"] in tr
     n = n_sims
@@ -168,6 +186,8 @@ def run_job(job):
                 repair_precision=100 * agg["rep_ok"] / agg["rep"] if agg["rep"] else None,
                 inspect_precision=100 * agg["insp_ok"] / agg["insp"] if agg["insp"] else None,
                 crew_calls=(agg["rep"] + agg["insp"]) / n, false_calls=(agg["rep"] - agg["rep_ok"] + agg["insp"] - agg["insp_ok"]) / n,
+                auc_prior=auc(s_prior, labels), auc_post=auc(s_post, labels),
+                cons_found_per_event=agg["cons_found"] / n, cons_found_se=float(np.std(per_event, ddof=1) / math.sqrt(n)) if n > 1 else 0.0, found_per_event=agg["found"] / n,
                 km_inspected=agg["km"] / n, total_km=total_km, faults_per_run=agg["faults"] / n, sorties_per_run=agg["sorties"] / n)
 
 

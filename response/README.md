@@ -107,3 +107,22 @@ The decisions are reliable: almost no crew is sent for nothing. Coverage is limi
 1. **More drones, or a swap battery** instead of a 3 h charge (2 sorties per 4 h is the binding limit).
 2. **Faster confirmation:** a second channel in the same pass. A thermal + visual agreement immediately reaches the repair threshold.
 3. **Crews on priors:** for high-consequence lines no drone will reach in time (in the example, the dead 27 km LINE_024), send a crew directly once P x consequence passes the inspection cost.
+
+## 5. Fleet size before launch (`fleet.py`)
+
+How many drones does this grid or area need? For each K from `fleet.k_min` to `fleet.k_max`:
+1. Place K bases with the same optimiser as `placement/`.
+2. Run N simulated events through the full response model.
+3. Score the fleet: value = consequence-weighted faults found per event × outage cost × hours saved per find; net = value − K × drone cost per event.
+
+The choice uses the one-standard-error rule: among the K whose bases cover at least `min_coverage` of the line, take the smallest K whose net is within one standard error of the best net. Two cases are flagged instead:
+- **Marginal:** the best net is not clearly positive.
+- **Not cost-effective:** no K pays off.
+
+The output also shows the ROC AUC of the fault probabilities, before the flights (prior) and after them (posterior).
+
+```sh
+python3 -I response/fleet.py --data path/to/grid_or_area [more folders ...] --sims 300 [--charge-h 0.25] [--window-h 8]
+```
+
+To size each area separately, pass one folder per area.
