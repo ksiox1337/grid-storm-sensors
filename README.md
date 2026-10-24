@@ -1,4 +1,4 @@
-# Storm Line Patrol
+# PowerDrone
 
 Post-storm grid triage with five line-riding sensor packages (EHL hackathon, synthetic Bavarian windstorm scenario).
 
