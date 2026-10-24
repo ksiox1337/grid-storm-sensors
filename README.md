@@ -10,5 +10,6 @@ Post-storm grid triage with five line-riding sensor packages (EHL hackathon, syn
 python3 -I build.py /path/to/participant_package
 open index.html
 ```
+- `placement/`: placement of 5 bases with a 15 km radius (coverage, seasonal risk, maps); see `placement/README.md`.
 
 All sensor readings in the walkthrough are hypothetical. Grid data © OpenStreetMap contributors, ODbL 1.0.
