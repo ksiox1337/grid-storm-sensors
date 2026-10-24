@@ -11,6 +11,7 @@ python3 -I build.py /path/to/participant_package
 open index.html
 ```
 - `placement/`: placement of 5 bases with a 15 km radius (coverage, seasonal risk, maps); see `placement/README.md`.
+- `response/`: what happens after each drone reading (Bayesian search, flight/charge limits) and when to recommend inspection or repair; see `response/README.md`.
 
 All sensor readings in the walkthrough are hypothetical. Grid data © OpenStreetMap contributors, ODbL 1.0.
 
