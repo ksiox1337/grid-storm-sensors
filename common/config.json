@@ -296,5 +296,15 @@
     "hours_saved_per_find": 2.0,
     "drone_cost_per_event": 0.4,
     "min_coverage": 0.95
+  },
+  "ml": {
+    "_how": "impute: fill missing line fields with a classifier (ml/impute.py). risk_model: path to a model trained by ml/risk_model.py; when set it replaces the hand-set background prior. report_classifier: 'keywords' (offline) or 'jev' (online, needs JEV_API_KEY and JEV_URL).",
+    "impute": true,
+    "impute_fields": [
+      "circuits"
+    ],
+    "impute_min_prob": 0.7,
+    "risk_model": null,
+    "report_classifier": "keywords"
   }
 }

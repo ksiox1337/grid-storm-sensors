@@ -33,9 +33,12 @@ def bayes(p, lr):
     return o / (1 + o)
 
 
+_rc = _load("rc", os.path.join(ROOT, "ml", "report_classifier.py"))
+
+
 def report_lr(r, cfg):
-    text = " ".join(str(r.get(k, "")) for k in ("information_type", "type", "description", "text")).lower()
-    return next((lr for word, lr in cfg["reports"]["lr_by_keyword"] if word in text), cfg["reports"]["default_lr"])
+    """LR of a field report: keyword rule offline, or the JEV classifier online (ml/report_classifier.py)."""
+    return _rc.report_lr(r, cfg)[0]
 
 
 def report_conf(r, cfg):
@@ -50,6 +53,31 @@ def season_of(cfg):
     name = cfg["scenario"].get("event_season")
     if name: return [(1.0, cfg["seasons"][name])]
     return [(cfg["season_share"][s], p) for s, p in cfg["seasons"].items()]
+
+
+FEATURES = ["v_rel", "v_low", "v_high", "single_circuit", "missing_data", "log_line_km",
+            "cross_winter", "cross_spring", "cross_summer", "cross_autumn", "radial", "max_end_degree"]
+_RISK_MODEL = {}
+
+
+def background_features(sg, bearing, cfg, radial, nodes):
+    """Static per-cell features for the learned background-risk model (no live event data)."""
+    deg = [nodes[str(e)]["degree"] for e in (sg["from_node"], sg["to_node"]) if e is not None and str(e) in nodes] or [0]
+    f = dict(v_rel=sg["v_rel"], v_low=float(sg["v_low"]), v_high=float(sg["v_high"]), single_circuit=float(sg["single_circuit"]),
+             missing_data=float(sg["missing_data"]), log_line_km=math.log1p(sg["length_km"]), radial=float(radial), max_end_degree=max(deg))
+    for name, s in cfg["seasons"].items():
+        f[f"cross_{name}"] = abs(math.sin(bearing - math.radians(s["wind_from_deg"])))
+    return [f.get(k, 0.0) for k in FEATURES]
+
+
+def learned_rate(cfg):
+    """Background fault rate per km per event from a trained model (ml/risk_model.py), or None."""
+    path = cfg.get("ml", {}).get("risk_model")
+    if not path: return None
+    path = path if os.path.isabs(path) else os.path.join(ROOT, path)
+    if path not in _RISK_MODEL:
+        import joblib; _RISK_MODEL[path] = joblib.load(path)
+    return _RISK_MODEL[path]
 
 
 def build_cells(data, cfg, segments=None, nodes_path=None):
@@ -79,8 +107,13 @@ def build_cells(data, cfg, segments=None, nodes_path=None):
             mid = sub[len(sub) // 2]; length = hi - lo
             bearing = math.atan2(sub[-1][0][0] - sub[0][0][0], sub[-1][0][1] - sub[0][0][1])
             exposure = 1.0 if scen["event_area"] is None or gio.pip(*mid[1], scen["event_area"]) else pr_cfg["outside_event_area_factor"]
-            season_risk = sum(w * sb.risk(sg, bearing, s, lf) for w, s in seasons)
-            lam = pr_cfg["faults_per_km_in_event_area"] * exposure * season_risk * (sg["fault_prob"] or 1.0)
+            feat = background_features(sg, bearing, cfg, radial, nodes)
+            model = learned_rate(cfg)
+            if model is not None:  # ML: background rate learned from fault history
+                lam = float(model.predict([feat])[0]) * exposure * (sg["fault_prob"] or 1.0)
+            else:                  # hand-set prior from config
+                season_risk = sum(w * sb.risk(sg, bearing, s, lf) for w, s in seasons)
+                lam = pr_cfg["faults_per_km_in_event_area"] * exposure * season_risk * (sg["fault_prob"] or 1.0)
             p = 1 - math.exp(-lam * length); why = []
             for r, poly in scen["report_areas"]:  # "somewhere in this area" reports
                 if gio.pip(*mid[1], poly):
@@ -89,7 +122,7 @@ def build_cells(data, cfg, segments=None, nodes_path=None):
                         p = bayes(p, 1 + (lr - 1) * report_conf(r, cfg)); why.append(str(r.get("information_id") or r.get("report_id") or "report"))
             if sg["id"] in dead:
                 p = bayes(p, pr_cfg["dead_line_lr"]); why.append("dead line")
-            cells.append(dict(id=f"{sg['id']}#{k+1}", seg=sg["id"], k=k, xy=mid[0], ll=mid[1], a=sub[0][0], b=sub[-1][0],
+            cells.append(dict(feat=feat, exposure=exposure, id=f"{sg['id']}#{k+1}", seg=sg["id"], k=k, xy=mid[0], ll=mid[1], a=sub[0][0], b=sub[-1][0],
                               len=length, p=p, p0=p, cons=cons, live=sg["id"] not in dead, why=why, obs=[], status="open"))
     return cells, fwd, inv, scen
 

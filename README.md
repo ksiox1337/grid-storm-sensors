@@ -6,6 +6,7 @@ Post-storm grid triage with five line-riding sensor packages (EHL hackathon, syn
 - `template.html`: the interactive page with map, flight/charge timeline, decision log and hazard playbooks.
 - `build.py`: injects the participant package data and the engine into `index.html`.
 
+- `ml/`: machine learning: missing-field imputation, a fault-risk model learned from history, and a report classifier (JEV online / keywords offline); see `ml/README.md`.
 - `bench/`: benchmark on 5 grids x 16 settings x 200 simulated events, with a visual report (`bench/out/report.html`).
 - `tests/test_generic.py`: runs placement and response on a different, randomly generated grid to keep the solution generic.
 

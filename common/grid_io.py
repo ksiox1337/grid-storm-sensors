@@ -135,11 +135,24 @@ def load_scenario(data, cfg, segs):
     return out
 
 
+IMPUTE_LOG = {}
+
+
 def load_all(data, cfg, segments=None, nodes=None):
     seg_path = segments or find(data, "*segment*.geojson", "*line*.geojson", "*.geojson")
     segs = load_segments(seg_path, cfg)
     node_path = nodes or find(data, "*node*.geojson")
-    return segs, load_nodes(node_path, cfg, segs), load_scenario(data, cfg, segs)
+    node_map = load_nodes(node_path, cfg, segs)
+    if cfg.get("ml", {}).get("impute"):  # ML: fill missing attributes (ml/impute.py), mark them as imputed
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("ml_impute", os.path.join(os.path.dirname(HERE), "ml", "impute.py"))
+        m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+        IMPUTE_LOG.clear(); m.impute(segs, cfg, {k: v["degree"] for k, v in node_map.items()}, IMPUTE_LOG)
+        mx = cfg["line_factors"]["single_circuit_max_cables"]
+        for s in segs:
+            c = s["circuits"]
+            s["single_circuit"] = (c == 1) or (c is None and s["cables"] is not None and s["cables"] <= mx)
+    return segs, node_map, load_scenario(data, cfg, segs)
 
 
 def projection(segs):
