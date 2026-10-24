@@ -1,0 +1,289 @@
+<title>Storm Line Patrol</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: control-room console. Map + timeline on the left, decision log on the right; reference tabs below. */
+:root{
+  --bg:#f3f5f7; --panel:#ffffff; --ink:#18212b; --muted:#5b6876; --line:#d5dce3;
+  --accent:#c77700; --live:#2f7d5b; --dead:#9aa5b1; --risk1:#f2d9a6; --risk2:#e8a33a; --risk3:#c2410c;
+  --crit:#b42318; --ok:#2f7d5b; --warn:#b26b00; --area:rgba(80,110,160,.10); --areaStroke:#5b78a8; --storm:rgba(120,140,170,.07);
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --panel:#161e26; --ink:#e3e9ef; --muted:#93a1b0; --line:#2a3642;
+  --accent:#f0a030; --live:#4fb38a; --dead:#4d5966; --risk1:#6b5426; --risk2:#c98628; --risk3:#f06a35;
+  --crit:#f0645a; --ok:#4fb38a; --warn:#e8a33a; --area:rgba(120,150,210,.12); --areaStroke:#7d9bd0; --storm:rgba(140,160,200,.06); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --panel:#161e26; --ink:#e3e9ef; --muted:#93a1b0; --line:#2a3642;
+  --accent:#f0a030; --live:#4fb38a; --dead:#4d5966; --risk1:#6b5426; --risk2:#c98628; --risk3:#f06a35;
+  --crit:#f0645a; --ok:#4fb38a; --warn:#e8a33a; --area:rgba(120,150,210,.12); --areaStroke:#7d9bd0; --storm:rgba(140,160,200,.06); color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1320px;margin:0 auto;display:grid;gap:20px}
+h1,h2,h3{font-family:var(--f-display);font-weight:600;letter-spacing:.01em;text-wrap:balance;margin:0}
+h1{font-size:2.3rem;line-height:1.05}
+h2{font-size:1.45rem}
+h3{font-size:1.1rem}
+p{margin:0}
+.lede{max-width:72ch;color:var(--muted)}
+.tag{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.map{width:100%;height:auto;display:block;aspect-ratio:1.45;max-width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:18px;height:4px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.steps button,.tabs button{font:500 .82rem var(--f-mono);border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:6px 10px;border-radius:4px;cursor:pointer}
+.steps button[aria-pressed="true"],.tabs button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#111}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gantt{width:100%;height:auto;display:block;margin-top:12px}
+.log{display:grid;gap:12px}
+.ev{border-left:3px solid var(--line);padding:2px 0 2px 12px;display:grid;gap:4px}
+.ev[data-k="act"]{border-color:var(--crit)}.ev[data-k="more"]{border-color:var(--warn)}.ev[data-k="clear"]{border-color:var(--ok)}.ev[data-k="plan"]{border-color:var(--accent)}
+.ev .t{font:500 .75rem var(--f-mono);color:var(--muted)}
+.hyp{font:600 .68rem var(--f-mono);letter-spacing:.06em;color:var(--warn);text-transform:uppercase}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 .72rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.scroll{overflow-x:auto}
+.pill{display:inline-block;font:500 .7rem var(--f-mono);padding:1px 7px;border-radius:10px;border:1px solid currentColor}
+.p-act{color:var(--crit)}.p-more{color:var(--warn)}.p-clear{color:var(--ok)}.p-wait{color:var(--muted)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;min-width:60px}.bar>span{display:block;height:100%;background:var(--accent)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.cols>div{min-width:0;display:grid;gap:6px;align-content:start}
+ul{margin:0;padding-left:18px}li{margin:2px 0}
+.small{font-size:.84rem;color:var(--muted)}
+.detail{font-size:.86rem;display:grid;gap:4px}
+.k{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.k div{border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+.k b{display:block;font:600 1.3rem var(--f-display)}
+svg text{font-family:var(--f-mono)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <span class="tag">Synthetic exercise · SYN_BAVARIA_WIND_01 · Lech–Wertach 110/380 kV grid</span>
+    <h1>Storm Line Patrol: where five line-riding sensors look first, and why</h1>
+    <p class="lede">A generic triage engine for post-storm grid investigation. It turns vague reports into a ranked list of line sections, sends five 30-minute sensor packages where a look is worth most, and updates the ranking with every reading. Below: the plan for the supplied storm, replayed step by step with clearly labelled hypothetical sensor readings.</p>
+  </header>
+
+  <div class="k" id="kpis"></div>
+
+  <div class="grid">
+    <section class="panel" style="display:grid;gap:4px">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">
+        <h2 id="stepTitle">Step</h2><span class="small mono" id="stepClock"></span>
+      </div>
+      <svg class="map" id="map" viewBox="0 0 1000 690" role="img" aria-label="Map of line sections coloured by investigation priority"></svg>
+      <div class="legend">
+        <span><i style="background:var(--risk3)"></i>high priority</span><span><i style="background:var(--risk2)"></i>medium</span><span><i style="background:var(--risk1)"></i>low</span>
+        <span><i style="background:var(--dead)"></i>known de-energized</span><span><i style="background:var(--areaStroke);height:2px"></i>report area</span>
+        <span><svg width="14" height="14" style="vertical-align:middle"><circle cx="7" cy="7" r="5" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/></svg> sensor package</span>
+      </div>
+      <div class="steps" id="steps" role="group" aria-label="Walkthrough steps"></div>
+      <svg class="gantt" id="gantt" viewBox="0 0 1000 150" role="img" aria-label="Flight and charging timeline for five packages"></svg>
+    </section>
+    <aside class="panel log" id="log" aria-live="polite"></aside>
+  </div>
+
+  <section class="panel" style="display:grid;gap:10px">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">
+      <h2>Ranked line sections at this step</h2><span class="small">Click a row or a line on the map for its evidence.</span>
+    </div>
+    <div class="scroll"><table id="rank"></table></div>
+    <div class="detail" id="detail"></div>
+  </section>
+
+  <section class="panel" style="display:grid;gap:14px">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div id="tabBody"></div>
+  </section>
+</div>
+
+<script>
+const DATA=/*DATA*/;
+/*ENGINE*/
+</script>
+<script>
+const $=s=>document.querySelector(s), ns='http://www.w3.org/2000/svg';
+const el=(t,a={},p)=>{const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e};
+const PACKS=['A','B','C','D','E'];
+const P=ENGINE.params({requireEvidence:true});
+const HZN={veg:'vegetation',conductor:'hot / damaged conductor',sag:'low clearance',motion:'conductor swing',ice:'ice load',fire:'fire'};
+
+// ---- Walkthrough script. Sensor readings are HYPOTHETICAL and labelled so; plans come from the engine. ----
+// time in minutes after the storm. Each sortie: pack, seg, start (min). Readings: seg, hazard, reading, coverage.
+const STEPS=[
+ {t:12, title:'T+0:12 Storm alert, packages staged', kind:'plan',
+  text:'All six reports are on the desk. The engine ranks every line before anything flies: storm exposure, which report areas the line crosses and how confident each report is, voltage, and known switching state. All five packages sit charged on energized 110 kV lines at Oberottmarshausen (SUBSTATION_07), Schwabmünchen (SUBSTATION_15) and Balzhausen (SUBSTATION_01). Nothing flies yet: a weather alert names no asset, and a flight spent now costs 3.5 h of that package.'},
+ {t:44, title:'T+0:44 Protection event, LINE_024 switched off', kind:'plan', dead:['LINE_024'],
+  text:'Dispatch logs one trip and reclose in the southwest, and confirms LINE_024 (26.8 km, SUBSTATION_07–SUBSTATION_01) is de-energized. That line is the restore-supply question, but a package cannot charge on it: any flight over it must end on a live neighbour.'},
+ {t:50, title:'T+0:50 Wave 1: three packages fly, two held back', kind:'plan', wave:3,
+  text:'The planner sends packages to the three best evidence-backed targets. Two stay charged in reserve, because a 3-hour recharge means a package that flies now cannot follow up its own finding before T+4:20, after the 4-hour window.'},
+ {t:80, title:'T+1:20 Wave 1 lands: one finding, one unclear, one clear', kind:'mixed',
+  reads:[{seg:'LINE_004',hazard:'conductor',reading:'weak'},{seg:'LINE_024',hazard:'veg',reading:'clear'},{seg:'LINE_026',hazard:'veg',reading:'strong'}],
+  notes:[
+   ['more','LINE_004 · unclear','HYPOTHETICAL: thermal shows one phase clamp 9 K warmer than the other two phases on the same tower, in afternoon sun. Phase-to-phase difference removes most of the sun bias, but 9 K at unknown load is below the action threshold. Needs a second look with acoustic/UV, from a reserve package.'],
+   ['clear','LINE_024 · clear (partial)','HYPOTHETICAL: E-field confirms the line is dead along the first 8 km from SUBSTATION_07. RGB and LiDAR show no tree in the 5 m clearance band there. That clears 30% of the line only; 19 km remain unseen.'],
+   ['act','LINE_026 · finding','HYPOTHETICAL: LiDAR measures a leaning spruce 1.4 m from the lower conductor about 6 km from NODE_009, with fresh scorch on the bark in RGB. Two independent modalities agree and it matches reports 02 and 03.']]},
+ {t:90, title:'T+1:30 Reserves fly the follow-ups', kind:'plan', reserve:[{pack:'D',seg:'LINE_004'},{pack:'E',seg:'LINE_024'}],
+  text:'Reserve D re-flies the warm clamp on LINE_004 with microphone and UV, in slow hover at 20 m stand-off. Reserve E starts from the Balzhausen end of LINE_024 and lands on live LINE_064, so the middle of the de-energized line gets covered from both ends.'},
+ {t:120, title:'T+2:00 Follow-ups land, conductor-motion report arrives', kind:'mixed',
+  reads:[{seg:'LINE_004',hazard:'conductor',reading:'strong'},{seg:'LINE_024',hazard:'veg',reading:'clear'}],
+  notes:[
+   ['act','LINE_004 · confirmed','HYPOTHETICAL: periodic crackle at 100 Hz plus UV corona at the same clamp. Heat, sound and UV now agree. Recommend a planned 380 kV clamp inspection, no emergency switching: the joint is warm, not failing.'],
+   ['more','LINE_024 · 60% seen, clear','HYPOTHETICAL: second 8 km from the Balzhausen end also clear. About 11 km in the middle are still unseen. The line tripped for a reason, so a full clear-sky test re-energization is not yet justified on sensor evidence alone.'],
+   ['plan','Report 06 · evidence fading','The northeast swing report (LINE_054, LINE_039, LINE_003) ranks below the southwest lines, and swing stops when the wind drops: an IMU at T+4:20, the first free slot, would only see a calm line. Recommendation now: ground patrol looks for clash marks and damaged spacers on those spans, instead of a late flight.']]},
+ {t:240, title:'T+4:00 Window closes: handover queue', kind:'plan', wave2:true,
+  text:'Each package flew once: 30 min in the air plus 3 h on the line puts the next launch at T+4:20 for A–C and T+5:00 for D–E. The engine replans without the two lines already handed to crews and hands the next shift a queue: the unseen middle of LINE_024 first, then the lines crossing the protection-event area (LINE_015, LINE_036). Report 04 (flash) stays low: checking the generator log is cheaper than any flight.'},
+];
+
+function stateAt(i){
+  const S=ENGINE.build(DATA.segs,DATA.ctx,DATA.reports,{knownDead:[]});
+  const by=Object.fromEntries(S.map(s=>[s.id,s]));
+  const sorties=[]; const events=[]; let wave1=[];
+  for(let k=0;k<=i;k++){
+    const st=STEPS[k];
+    if(st.dead) st.dead.forEach(id=>{by[id].dead=true;by[id].cons*=1.6});
+    if(st.wave){ wave1=ENGINE.plan(S,PACKS.slice(0,st.wave),P); wave1.forEach(w=>sorties.push({...w,start:st.t})); }
+    if(st.reads) st.reads.forEach(r=>{const sort=[...sorties].reverse().find(x=>x.seg===r.seg); ENGINE.observe(by[r.seg],r.hazard,r.reading,sort?sort.coverage:1)});
+    if(st.reserve) st.reserve.forEach(r=>{const s=by[r.seg];const inspect=Math.min(s.len,P.inspectKm);
+      const land=s.dead?(r.seg==='LINE_024'?'LINE_064':null):r.seg; sorties.push({pack:r.pack,seg:r.seg,inspect,coverage:inspect/s.len,land,start:st.t})});
+    if(st.wave2){ const done=new Set(['LINE_026','LINE_004']); // actioned lines leave the queue
+      ENGINE.plan(S,['A','B','C'],P,done).forEach(w=>sorties.push({...w,start:260,queued:true})); }
+  }
+  return {S,by,sorties,step:STEPS[i]};
+}
+
+// ---- Map ----
+const ALL=DATA.segs.features.flatMap(f=>f.geometry.coordinates);
+const B={x0:10.45,x1:10.88,y0:48.09,y1:48.38};
+const sx=x=>(x-B.x0)/(B.x1-B.x0)*1000, sy=y=>690-(y-B.y0)/(B.y1-B.y0)*690;
+const path=c=>c.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join('');
+let SEL=null, CUR=0;
+function band(s){if(s.dead)return 'var(--dead)';const v=ENGINE.priority(s,P);return v>.05?'var(--risk3)':v>.022?'var(--risk2)':'var(--risk1)'}
+function drawMap(st){
+  const m=$('#map'); m.innerHTML='';
+  const storm=DATA.ctx.features.find(f=>f.properties.context_kind==='synthetic_storm_footprint');
+  el('path',{d:path(storm.geometry.coordinates[0])+'Z',fill:'var(--storm)',stroke:'var(--areaStroke)','stroke-dasharray':'2 6','stroke-width':1},m);
+  DATA.ctx.features.filter(f=>f.properties.context_kind==='synthetic_report_area'&&f.properties.information_id!=='SYN_REPORT_01').forEach(f=>{
+    const c=f.geometry.coordinates[0];el('path',{d:path(c)+'Z',fill:'var(--area)',stroke:'var(--areaStroke)','stroke-dasharray':'6 4','stroke-width':1.2},m);
+    const t=el('text',{x:sx(Math.min(...c.map(p=>p[0])))+4,y:sy(Math.max(...c.map(p=>p[1])))+14,'font-size':13,fill:'var(--areaStroke)'},m);t.textContent='R'+f.properties.information_id.slice(-2)});
+  const rank=[...st.S].sort((a,b)=>ENGINE.priority(b,P)-ENGINE.priority(a,P));
+  [...st.S].sort((a,b)=>ENGINE.priority(a,P)-ENGINE.priority(b,P)).forEach(s=>{
+    const w=(s.kv>=380?4.5:2.6)+(SEL===s.id?3:0);
+    const g=el('path',{d:path(s.coords),fill:'none',stroke:band(s),'stroke-width':w,'stroke-linecap':'round',...(s.dead?{'stroke-dasharray':'7 5'}:{})},m);
+    const hit=el('path',{d:path(s.coords),fill:'none',stroke:'transparent','stroke-width':14,style:'cursor:pointer'},m);
+    hit.addEventListener('click',()=>{SEL=s.id;render(CUR)});
+    const tt=el('title',{},hit);tt.textContent=`${s.id} · ${s.kv} kV · ${s.len.toFixed(1)} km`;
+  });
+  DATA.nodes.features.filter(f=>f.properties.node_type==='abstract_substation').forEach(f=>{
+    const [x,y]=f.geometry.coordinates;el('rect',{x:sx(x)-4,y:sy(y)-4,width:8,height:8,fill:'var(--panel)',stroke:'var(--ink)','stroke-width':1.3},m)});
+  rank.slice(0,5).forEach(s=>{const c=s.coords[Math.floor(s.coords.length/2)];const t=el('text',{x:sx(c[0])+7,y:sy(c[1])-7,'font-size':12,fill:'var(--ink)'},m);t.textContent=s.id.replace('LINE_','L')});
+  // packages: latest sortie per pack that has started
+  const last={};st.sorties.filter(x=>x.start<=st.step.t).forEach(x=>last[x.pack]=x);
+  Object.values(last).forEach(x=>{const s=st.by[x.seg];const flying=st.step.t<x.start+30;
+    const c=s.coords[0];const e=s.coords[s.coords.length-1];const L=st.by[x.land];const pos=flying?c:(L?L.coords[Math.floor(L.coords.length/2)]:e);
+    el('circle',{cx:sx(pos[0]),cy:sy(pos[1]),r:9,fill:flying?'var(--accent)':'var(--panel)',stroke:'var(--accent)','stroke-width':2.5},m);
+    const t=el('text',{x:sx(pos[0]),y:sy(pos[1])+4,'font-size':11,'text-anchor':'middle',fill:flying?'#111':'var(--accent)','font-weight':600},m);t.textContent=x.pack});
+  // scale bar 5 km
+  const kmx=5/74.3/(B.x1-B.x0)*1000;el('line',{x1:20,y1:670,x2:20+kmx,y2:670,stroke:'var(--ink)','stroke-width':2},m);
+  const sb=el('text',{x:20,y:660,'font-size':12,fill:'var(--muted)'},m);sb.textContent='5 km';
+}
+
+function drawGantt(st){
+  const g=$('#gantt');g.innerHTML='';const W=1000,x0=40,T=240,X=t=>x0+t/T*(W-x0-10);
+  for(let h=0;h<=4;h++){el('line',{x1:X(h*60),x2:X(h*60),y1:4,y2:132,stroke:'var(--line)'},g);const t=el('text',{x:X(h*60),y:146,'font-size':11,fill:'var(--muted)','text-anchor':'middle'},g);t.textContent='T+'+h+':00'}
+  PACKS.forEach((p,i)=>{const y=8+i*25;const t=el('text',{x:4,y:y+13,'font-size':12,fill:'var(--ink)'},g);t.textContent=p;
+    st.sorties.filter(x=>x.pack===p).forEach(x=>{
+      el('rect',{x:X(x.start),y,width:X(x.start+30)-X(x.start),height:16,fill:'var(--accent)',rx:2},g);
+      el('rect',{x:X(x.start+30),y:y+5,width:Math.max(0,Math.min(X(x.start+30+180),X(T))-X(x.start+30)),height:6,fill:'var(--live)',opacity:.5,rx:2},g);
+      const l=el('text',{x:X(x.start)+3,y:y+12,'font-size':10,fill:'#111'},g);l.textContent=x.seg.replace('LINE_','L')});});
+  el('line',{x1:X(st.step.t),x2:X(st.step.t),y1:0,y2:134,stroke:'var(--crit)','stroke-width':1.5},g);
+}
+
+function verdict(s){const p=ENGINE.pFault(s);const strong=s.obs.filter(o=>o.reading==='strong').length;
+  if(p>=.6&&strong>=1) return ['act','act: dispatch'];
+  if(s.obs.length&&p<.06&&s.obs.reduce((a,o)=>a+o.coverage,0)>=.95) return ['clear','cleared'];
+  if(s.obs.length) return ['more','needs more'];
+  return ['wait','not yet seen'];}
+
+function drawRank(st){
+  const rows=[...st.S].sort((a,b)=>ENGINE.priority(b,P)-ENGINE.priority(a,P)).slice(0,12);
+  const mx=ENGINE.priority(rows[0],P);
+  $('#rank').innerHTML='<thead><tr><th>Line</th><th>kV</th><th class="n">km</th><th>Likely problem</th><th class="n">P(fault)</th><th>Priority</th><th>Reports</th><th>Status</th></tr></thead><tbody>'+
+   rows.map(s=>{const [k,l]=verdict(s);return `<tr data-id="${s.id}" style="cursor:pointer${SEL===s.id?';background:var(--bg)':''}"><td class="mono">${s.id}${s.dead?' <span class="pill p-wait">dead</span>':''}</td><td class="mono">${s.kv}</td><td class="n">${s.len.toFixed(1)}</td><td>${HZN[ENGINE.topHaz(s)]}</td><td class="n">${(ENGINE.pFault(s)*100).toFixed(0)}%</td><td><div class="bar"><span style="width:${(ENGINE.priority(s,P)/mx*100).toFixed(0)}%"></span></div></td><td class="small">${s.why.map(w=>w.replace('REPORT_','R')).join(', ')||'exposure only'}</td><td><span class="pill p-${k}">${l}</span></td></tr>`}).join('')+'</tbody>';
+  $('#rank').querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{SEL=r.dataset.id;render(CUR)});
+  const s=SEL&&st.by[SEL];
+  $('#detail').innerHTML=s?`<h3>${s.id} · ${s.from} → ${s.to}</h3><p class="small">${s.kv} kV, ${s.len.toFixed(1)} km, ${s.exp.toFixed(1)} km inside the storm footprint, consequence weight ${s.cons.toFixed(2)}.</p><p>${ENGINE.HAZ.map(z=>`${HZN[z]} <span class="mono">${(s.h[z]*100).toFixed(1)}%</span>`).join(' · ')}</p>${s.obs.length?`<p class="small">Readings: ${s.obs.map(o=>`${HZN[o.hazard]} ${o.reading} (covered ${(o.coverage*100).toFixed(0)}%)`).join('; ')}</p>`:''}`:'';
+}
+
+function drawLog(i,st){
+  const out=[];
+  for(let k=0;k<=i;k++){const s=STEPS[k];
+    if(s.text) out.push(`<div class="ev" data-k="${s.kind==='plan'?'plan':'more'}"><span class="t">${s.title}</span><p>${s.text}</p>${(s.wave||s.wave2)?`<p class="small mono">${st.sorties.filter(x=>x.start===s.t||(s.wave2&&x.queued)).map(x=>`${x.pack} → ${x.seg} (${x.inspect.toFixed(1)} km, ${(x.coverage*100).toFixed(0)}%, lands ${x.land})`).join('<br>')}</p>`:''}</div>`);
+    (s.notes||[]).forEach(([k2,h,t])=>out.push(`<div class="ev" data-k="${k2}"><span class="t">${s.title.split(' ')[0]} · ${h}</span><span class="hyp">Hypothetical reading</span><p>${t.replace('HYPOTHETICAL: ','')}</p></div>`));
+  }
+  $('#log').innerHTML='<h2>Decision log</h2>'+out.reverse().join('');
+}
+
+function drawKpis(st){
+  const seen=st.sorties.filter(x=>x.start+30<=st.step.t).reduce((a,x)=>a+x.inspect,0);
+  const exposed=st.S.reduce((a,s)=>a+s.exp,0);
+  const acts=st.S.filter(s=>verdict(s)[0]==='act').length;
+  const free=PACKS.filter(p=>{const xs=st.sorties.filter(x=>x.pack===p);return !xs.length||xs.at(-1).start+210<=st.step.t}).length;
+  $('#kpis').innerHTML=[['Line in storm footprint',exposed.toFixed(0)+' km'],['Inspected so far',seen.toFixed(0)+' km'],['Packages ready to fly',free+' of 5'],['Repair / inspection calls',acts]].map(([a,b])=>`<div class="panel" style="padding:10px 14px"><span class="small">${a}</span><b class="mono" style="font-size:1.5rem;font-family:var(--f-display)">${b}</b></div>`).join('');
+}
+
+function render(i){CUR=i;const st=stateAt(i);
+  $('#stepTitle').textContent=STEPS[i].title.replace(/^T\+\S+ /,'');$('#stepClock').textContent=STEPS[i].title.split(' ')[0];
+  $('#steps').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===i));
+  drawMap(st);drawGantt(st);drawRank(st);drawLog(i,st);drawKpis(st);}
+STEPS.forEach((s,i)=>{const b=document.createElement('button');b.textContent=s.title.split(' ')[0];b.title=s.title;b.onclick=()=>render(i);$('#steps').appendChild(b)});
+
+// ---- Reference tabs ----
+const TABS={
+'Sensor kit':`<div class="cols">
+ <div><span class="tag">Pareto core · on every package</span><h3>Four sensors cover most storm faults</h3><ul>
+ <li><b>Electric-field / current probe</b> (contact on the conductor). Tells live from dead in one second, logs fault-current passage. This alone splits the grid into healthy and suspect sections, and it decides where a package can charge.</li>
+ <li><b>LWIR thermal camera</b> (radiometric, 640 px). Hot joints and clamps, compared phase to phase on the same tower to cancel sun and load. Also sees smouldering ground near the line.</li>
+ <li><b>RGB camera + small LiDAR</b>. Trees leaning in, broken strands, insulator damage; LiDAR gives clearance in metres to vegetation and ground.</li>
+ <li><b>IMU / inclinometer</b> while sitting on the line. Swing amplitude and frequency (galloping), and sag angle change, which is how ice or a slipped clamp shows up.</li></ul></div>
+ <div><span class="tag">Add-ons · only when the hazard calls for it</span><h3>Fit on 1–2 packages</h3><ul>
+ <li><b>Ultrasound microphone + UV-C corona camera</b>: confirms a warm spot is an electrical discharge (used in the walkthrough on LINE_004).</li>
+ <li><b>Gas / particulate sensor</b>: early smoke on fire-weather days.</li>
+ <li><b>Ice thickness by capacitance or load cell</b>: winter storms only.</li></ul>
+ <h3>What the kit cannot tell you</h3><ul>
+ <li>Which customers are off: the dataset holds no supply topology.</li><li>Faults inside substations or underground cable.</li>
+ <li>Hidden internal conductor damage without heat (needs load, which a dead line does not have).</li><li>Thermal readings on a de-energized line: no current, no heat.</li><li>Anything under heavy rain or fog for cameras and LiDAR.</li></ul></div></div>`,
+'All six hazards':`<div class="scroll"><table><thead><tr><th>Problem</th><th>20% that gives 80%</th><th>Public data for the prior</th><th>Act when</th><th>Needs more when</th></tr></thead><tbody>
+<tr><td><b>Trees and branches</b></td><td>LiDAR clearance + RGB along the span</td><td>Copernicus HRL Tree Cover Density, ESA WorldCover 10 m, OSM landuse=forest within 30 m; DWD gusts (ICON-D2, station data)</td><td>Object inside the clearance band or contact marks, seen by 2 modalities</td><td>Tree near but outside band; single blurry frame</td></tr>
+<tr><td><b>Damaged / hot wires</b></td><td>Thermal, phase-to-phase ΔT; E-field for live/dead</td><td>OSM line age tags where present, start_date; weather for sun loading (DWD radiation)</td><td>ΔT &gt; 20 K, or 10 K plus acoustic/UV agreement</td><td>ΔT 5–20 K with unknown load or sun on one side</td></tr>
+<tr><td><b>Low-hanging lines</b></td><td>LiDAR ground and canopy clearance; IMU sag angle</td><td>Copernicus DEM GLO-30 for ground profile; DWD air temperature (thermal sag)</td><td>Clearance below the legal minimum for the voltage</td><td>Clearance close to minimum on a hot afternoon</td></tr>
+<tr><td><b>Wind swing / clashing</b></td><td>IMU on the conductor, amplitude and frequency</td><td>DWD gust forecast and observed gusts; span length from OSM geometry</td><td>Repeated phase clashing or swing above design limit, plus a protection event</td><td>One gust event, no trip record</td></tr>
+<tr><td><b>Ice build-up</b></td><td>IMU sag + load/capacitance sensor</td><td>DWD temperature, humidity and freezing-rain forecasts</td><td>Sag change beyond design ice load</td><td>Rime visible, sag change small</td></tr>
+<tr><td><b>Fire near a line</b></td><td>Thermal of ground strip + gas sensor</td><td>NASA FIRMS VIIRS/MODIS active fires; EFFIS fire danger; Sentinel-2 burn scars</td><td>Open flame or hot ground under the line: report at once, de-energize decision to operator</td><td>Single warm pixel, possible sun-heated roof or vehicle</td></tr>
+</tbody></table></div><p class="small">Public layers enter the engine as multipliers on the per-km prior for the matching hazard. In this demo they are not loaded (multiplier 1), so the ranking shows only storm exposure, reports, voltage and known switching state.</p>`,
+'How the engine decides':`<div class="cols">
+<div><h3>Prior</h3><p>Each line starts with a small fault probability per km inside the storm footprint, per hazard. Reports raise the matching hazards with a likelihood ratio, weighted by the report's stated confidence and by how much of the report area the line covers (1 − e<sup>−km/2</sup>). A vague report spread over five lines raises each a little, never one a lot.</p></div>
+<div><h3>Priority</h3><p>P(fault) × consequence ÷ km to fly. 380 kV weighs 3, double circuits 1.25, a known de-energized line 1.6 because clearing it restores supply. First wave only goes to lines backed by a report or a known status; exposure-only lines wait.</p></div>
+<div><h3>Update</h3><p>Every reading is Bayesian: strong ×8, weak ×2, unclear ×1, clear ×0.25, raised to the share of the line actually seen. A clear pass over 30% of a line lowers it only a little, which is why LINE_024 stays near the top after its first pass.</p></div>
+<div><h3>Act / wait</h3><ul><li><span class="pill p-act">act</span> P ≥ 60% and at least one strong reading, ideally two modalities.</li><li><span class="pill p-clear">cleared</span> P &lt; 6% with ≥ 95% of the line seen.</li><li><span class="pill p-more">needs more</span> anything in between: re-fly with another modality, or ask for a ground patrol when no package is ready.</li><li>Fire or a conductor on the ground: report at once, no threshold.</li></ul></div></div>`,
+'Assumptions':`<div class="cols"><div><h3>Flight</h3><ul><li>Start: 100% charged, sitting on lines believed live, at three substations.</li><li>30 min flight, 6 min kept as landing reserve.</li><li>Cruise 54 km/h (21.6 km ferry range), inspection 20 km/h (8 km of line per sortie).</li><li>3 h charge, only on a live line. A sortie over a dead line must end on a live neighbour.</li><li>Landing on a line counts as an E-field check of that line.</li></ul></div>
+<div><h3>Grid data</h3><ul><li>Connections inside substations are unknown; the engine only uses shared node IDs to find landing neighbours.</li><li>Lines cut at the study boundary are treated as continuing; their cut ends are not faults.</li><li>Voltage does not prove charging power is available; landing reads it.</li><li>The engine's numbers (base rates, ratios) are illustrative and need calibrating on past storm records.</li></ul></div>
+<div><h3>Scenario</h3><ul><li>All six reports known from the start; the walkthrough adds them at their timestamps.</li><li>Every sensor reading shown is hypothetical and labelled.</li><li>Window: 4 h after the storm. A package that lands needs 3 h before it flies again, so each flies once in that time: five sorties for the fleet. That is why two are held in reserve.</li></ul></div></div>`,
+'Test next':`<ul>
+<li>Calibrate base rates and likelihood ratios on a real utility's outage and vegetation records (e.g. past storm reports from the Bundesnetzagentur disturbance statistics).</li>
+<li>Load the public layers (tree cover, DEM, DWD gusts) and check whether they move the same lines that field crews found damaged in past storms.</li>
+<li>Bench-test phase-to-phase thermal in sun versus shade to set the ΔT thresholds.</li>
+<li>Simulate 1 000 random fault placements on this grid: compare time-to-find for "all five at once" versus "three plus two in reserve".</li>
+<li>Field-test IMU swing measurement against video on a short span in wind.</li>
+<li>Ask control-room operators which outputs they would act on, and drop the rest.</li></ul>`
+};
+const tabs=$('#tabs');Object.keys(TABS).forEach((k,i)=>{const b=document.createElement('button');b.textContent=k;b.setAttribute('role','tab');b.onclick=()=>{tabs.querySelectorAll('button').forEach(x=>x.setAttribute('aria-selected',x===b));$('#tabBody').innerHTML=TABS[k]};tabs.appendChild(b);if(!i)b.click()});
+render(3);
+</script>
