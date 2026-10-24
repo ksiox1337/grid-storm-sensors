@@ -18,15 +18,16 @@
    },
    {
     "base": "B4",
-    "lat": 48.35203,
-    "lon": 10.61474
+    "lat": 48.35324,
+    "lon": 10.61651
    },
    {
     "base": "B5",
-    "lat": 48.23524,
-    "lon": 10.82289
+    "lat": 48.23635,
+    "lon": 10.82432
    }
   ],
+  "covered_km": 197.85,
   "risk_weighted_mean_km": 4.52,
   "top_lines": [
    "LINE_001",
@@ -58,15 +59,16 @@
    },
    {
     "base": "B5",
-    "lat": 48.23717,
-    "lon": 10.82932
+    "lat": 48.23677,
+    "lon": 10.82689
    }
   ],
+  "covered_km": 197.85,
   "risk_weighted_mean_km": 4.54,
   "top_lines": [
    "LINE_029",
-   "LINE_045",
-   "LINE_035"
+   "LINE_023",
+   "LINE_041"
   ]
  },
  "summer": {
@@ -97,19 +99,20 @@
     "lon": 10.82689
    }
   ],
+  "covered_km": 197.85,
   "risk_weighted_mean_km": 4.49,
   "top_lines": [
    "LINE_042",
    "LINE_035",
-   "LINE_054"
+   "LINE_004"
   ]
  },
  "autumn": {
   "bases": [
    {
     "base": "B1",
-    "lat": 48.16875,
-    "lon": 10.70917
+    "lat": 48.13714,
+    "lon": 10.77219
    },
    {
     "base": "B2",
@@ -123,16 +126,17 @@
    },
    {
     "base": "B4",
-    "lat": 48.24292,
-    "lon": 10.51584
+    "lat": 48.24191,
+    "lon": 10.51929
    },
    {
     "base": "B5",
-    "lat": 48.23717,
-    "lon": 10.82932
+    "lat": 48.23635,
+    "lon": 10.82432
    }
   ],
-  "risk_weighted_mean_km": 4.53,
+  "covered_km": 197.85,
+  "risk_weighted_mean_km": 4.52,
   "top_lines": [
    "LINE_041",
    "LINE_049",
@@ -143,8 +147,8 @@
   "bases": [
    {
     "base": "B1",
-    "lat": 48.17138,
-    "lon": 10.71209
+    "lat": 48.17006,
+    "lon": 10.71063
    },
    {
     "base": "B2",
@@ -153,8 +157,8 @@
    },
    {
     "base": "B3",
-    "lat": 48.33357,
-    "lon": 10.83816
+    "lat": 48.33626,
+    "lon": 10.83957
    },
    {
     "base": "B4",
@@ -167,6 +171,7 @@
     "lon": 10.82689
    }
   ],
+  "covered_km": 197.85,
   "risk_weighted_mean_km": 4.52,
   "top_lines": [
    "LINE_042",

@@ -84,22 +84,27 @@ def solve(cover, w, k):
 def refine(dist, w, r, chosen):
     """Stage 2, lexicographic: keep weighted coverage, then minimise weighted distance to the nearest
     base (p-median). Shorter transit = more of each capacity-limited sortie spent inspecting."""
+    w = np.asarray(w, np.float64)
+    tol = 1e-9 * max(float(w.sum()), 1e-12)  # relative, so any weight scale works
     def score(mind):
-        return (round(float(w[mind <= r].sum()), 6), -float(w @ mind))
+        return float(w[mind <= r].sum()), -float(w @ mind)
+    better = lambda a, b: a[0] > b[0] + tol or (a[0] >= b[0] - tol and a[1] > b[1] + tol)
     chosen = list(chosen)
     best = score(dist[chosen].min(0))
     improved = True
     while improved:
         improved = False
         for s in range(len(chosen)):
-            others = dist[[c for t, c in enumerate(chosen) if t != s]].min(0)
+            rest = [c for t, c in enumerate(chosen) if t != s]
+            others = dist[rest].min(0) if rest else np.full(dist.shape[1], np.inf, np.float32)
             newmin = np.minimum(dist, others)
-            cov = (newmin <= r).astype(np.float32) @ w
-            cost = newmin @ w
-            ok = np.where(cov >= best[0] - 1e-6)[0]
+            cov = (newmin <= r) @ w
+            cost = np.where(np.isfinite(newmin), newmin, 1e6) @ w
+            ok = np.where(cov >= best[0] - tol)[0]
+            if not len(ok): continue
             i = int(ok[np.argmin(cost[ok])])
             cand = score(newmin[i])
-            if cand > best and i not in chosen:
+            if i not in chosen and better(cand, best):
                 chosen[s], best, improved = i, cand, True
     return chosen, dist[chosen].min(0) <= r
 

@@ -6,11 +6,14 @@ Post-storm grid triage with five line-riding sensor packages (EHL hackathon, syn
 - `template.html`: the interactive page with map, flight/charge timeline, decision log and hazard playbooks.
 - `build.py`: injects the participant package data and the engine into `index.html`.
 
+- `tests/test_generic.py`: runs placement and response on a different, randomly generated grid to keep the solution generic.
+
 ```sh
 python3 -I build.py /path/to/participant_package
 open index.html
 ```
-- `placement/`: placement of 5 bases with a 15 km radius (coverage, seasonal risk, maps); see `placement/README.md`.
+- `common/`: generic input layer (`grid_io.py`) and every assumption of the system (`config.json`); nothing is tied to one dataset.
+- `placement/`: placement of K bases with radius R on any grid (coverage, seasonal risk, maps); see `placement/README.md`.
 - `response/`: what happens after each drone reading (Bayesian search, flight/charge limits) and when to recommend inspection or repair; see `response/README.md`.
 
 All sensor readings in the walkthrough are hypothetical. Grid data © OpenStreetMap contributors, ODbL 1.0.

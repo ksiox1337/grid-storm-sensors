@@ -1,6 +1,6 @@
 # Response model: what happens next, and when to act
 
-`model.py` implements the team flow diagram. It starts from the 5 all-year base positions in `placement/` and the information types in `data/datatypes.txt.rtf`:
+`model.py` implements the team flow diagram for **any grid**. It starts from K base positions (the all-year plan from `placement/`, any GeoJSON of points, or `"lat,lon;lat,lon"`) and the information types in `data/datatypes.txt.rtf`. Inputs are read by `common/grid_io.py`. Every number (limits, likelihood ratios, thresholds, costs, report keywords) is in `common/config.json`; the code holds no dataset values.
 
 ```
 reports backlog --> model --> evaluate criteria --> 5 drones --> location --> collect data
@@ -13,21 +13,30 @@ reports backlog --> model --> evaluate criteria --> 5 drones --> location --> co
 ```
 
 ```sh
-python3 -I response/model.py --data /path/to/participant_package --seed 8   # writes response/run_example.md
+python3 -I response/model.py --data path/to/data_folder [--bases bases.json] [--season autumn] [--seed 8]   # writes response/run_example.md
 ```
 
-Drone readings are **hypothetical**: the package publishes no ground truth. Each run draws a fictional set of faults from the prior and simulates what the sensors would report.
+Drone readings are **hypothetical**: no ground truth is available. Each run draws a fictional set of faults from the prior and simulates what the sensors would report.
+
+What is read from the data folder, if present:
+- **Event area:** a polygon whose properties mention storm, footprint, warning, and so on.
+- **Report areas:** polygons tied to a report id.
+- **Reports:** matched to a likelihood ratio by keywords in their type or text, scaled by their confidence (a word or a number).
+- **Dead lines:** found from report text such as "de-energized" or "tripped" plus a line id.
+- **Time window:** any `*window*hours` value.
+
+Everything missing falls back to neutral defaults. `tests/test_generic.py` checks this on a different grid. The examples and numbers below come from the challenge package (Bavaria, 198 km), run with `--season autumn`, because the scenario is a windstorm.
 
 ## 1. How the information types become numbers
 
 | Datatype (datatypes.txt) | In the model |
 |---|---|
-| Background: terrain, exposure, trees, season | Prior fault rate per 1 km cell: storm footprint x seasonal risk (crosswind, 110 kV vegetation, single circuit) from `placement/seasonal_config.json` |
-| Network topology, criticality, redundancy | Consequence weight: 380 kV x3, radial feed into a substation with one line x1.5, already-dead line x1.3 |
-| Consequence: population, critical facilities | `consequence_overrides` hook in the config (not in the package) |
+| Background: terrain, exposure, trees, season | Prior fault rate per cell: event area x seasonal risk (crosswind, vegetation on lower voltages, single circuit, ...) from `common/config.json` |
+| Network topology, criticality, redundancy | Consequence weight: up to x3 for the highest voltage in the grid, radial feed into a substation x1.5, already-dead line x1.3 |
+| Consequence: population, critical facilities | `consequence.overrides` in the config (per line id) |
 | Live reports + confidence | Likelihood ratio on every cell inside the report area: `1 + (LR - 1) x confidence` |
 | Measured conditions (wind, warnings) | Lower detection probability in the storm (pd = 0.75); wind explains motion readings |
-| Grid logs (LINE_024 de-energized) | Line counts as dead: no landing or charging there, prior x1.5 |
+| Grid logs (a line reported de-energised) | Line counts as dead: no landing or charging there, prior x1.5 |
 | Drone inspection data | Bayesian update per cell after each pass (below) |
 | Past experience | Replace the assumed priors with historical fault rates per line |
 
@@ -42,11 +51,11 @@ Every pass over a cell is a Bayesian search update. A reading changes the cell's
 | **Unclear** (gusts, rain, bad angle) | odds x1: nothing learned | The cell keeps its priority and gets a revisit. **Two unclear passes in a row** on an important cell mean the drone cannot resolve it: send a crew instead |
 | **Lack of evidence** (clear pass) | odds x(1 - pd) = x0.25 | Probability drops; below 2% the cell is cleared and the search moves to the next-best cell or line |
 
-On the top-priority cell (LINE_004#8, P = 0.05 prior):
+Challenge package example, top-priority cell (LINE_004#8, P = 0.05 prior):
 
 | Reading | P after | Decision | Next target |
 |---|---|---|---|
-| strong (visual + thermal) | 0.77 | physical inspection | neighbour LINE_004#7 (raised to 0.10) |
+| strong (visual + temperature) | 0.77 | physical inspection | neighbour LINE_004#7 (raised to 0.10) |
 | weak | 0.09 | need more evidence | same cell again |
 | unclear | 0.05 | need more evidence | same cell again |
 | clear | 0.01 | cleared | LINE_004#7 |
@@ -55,15 +64,14 @@ On the top-priority cell (LINE_004#8, P = 0.05 prior):
 
 - **Per sortie:** 30 min flight, 6 min reserve, 54 km/h ferry, 20 km/h inspection, so at most **8 km of line inspected** per sortie, minus the ferry time.
 - **Planner (CARP-style):** picks a run of adjacent cells on one line and checks that ferry in + inspection + ferry to a landing point fits in 24 min.
-- **Landing (E-VRP):** a sortie must end on a line that reads **live** (voltage channel). Over a dead line (LINE_024) the drone must reach the nearest live line within the reserve. The drone then **charges 3 h where it landed**, so its next sortie starts from there. The drones drift toward the evidence.
+- **Landing (E-VRP):** a sortie must end on a line that reads **live** (voltage channel). Over a dead line the drone must reach the nearest live line within the reserve. The drone then **charges 3 h where it landed**, so its next sortie starts from there. The drones drift toward the evidence.
 - **Reservations:** a cell another drone is flying is reserved until that drone lands. Its result isn't known yet, so two drones don't search the same line blind.
 - **The bottleneck is charging.** In the 4 h scenario window each drone flies **2 sorties**: 10 in total, about 40 of 198 km of line. Most of the grid is never seen by a drone in the first 4 h, so the ranking (priors x consequence) decides where crews go first.
 
-Example (seed 8, `run_example.md`):
-- D1 finds a strong 3D-position anomaly on LINE_004#5 at T+0.
-- After charging, D5 goes back with the visual channel. It confirms: P 0.28 -> 0.76, so LINE_004#5 goes to **physical inspection**.
-- D4's first pass on LINE_026 gave two weak readings and one unclear. D3 returns there and finds two adjacent strong cells: both go to **physical inspection**.
-- D5 started over the dead LINE_024 and had to land on the nearest live line.
+Example: [`run_example.md`](run_example.md) logs every sortie of a seed-8 run on the challenge package.
+- After a first strong reading, the next free drone returns to the same cell with another channel.
+- Confirmed cells go to **physical inspection**.
+- A drone that starts over the dead line must land on the nearest live line.
 
 ## 3. When to act
 
@@ -76,26 +84,26 @@ Decision rule per cell, run after every reading (`decide()` in `model.py`):
 | **Need more evidence** | Anything between | Back to the backlog with its updated probability; the next sortie decides whether a revisit is worth it |
 | **Cleared** | P < 2% | Enough clear passes; stop spending sorties here |
 
-Costs (`COST`) and thresholds are relative units. Replace them with the operator's crew costs, outage cost per hour and crew ETA.
+Costs and thresholds (`cost`, `decision` in `common/config.json`) are relative units. Replace them with the operator's crew costs, outage cost per hour and crew ETA.
 
 When the evidence must be stronger:
 - **The prior is low.** Two strong readings on a 5% prior only reach about 77%, so that gives an inspection, not a repair.
 - **The weather lowers detection.** Gusts lower pd, so a clear pass counts for less.
 
 When to act with less evidence:
-- **Consequence is high.** On a 380 kV line or a radial feed to hospitals, the expected loss passes the crew cost at a lower probability.
+- **Consequence is high.** On the highest-voltage lines or a radial feed to hospitals, the expected loss passes the crew cost at a lower probability.
 
-## 4. How good is it (200 hypothetical storms)
+## 4. How good is it (challenge package, 200 hypothetical storms)
 
 | Metric | Value |
 |---|---|
-| Line inspected by drones in 4 h | ~41 of 198 km |
-| Hypothetical faults per storm | 6.3 |
-| Faults sent to inspection/repair within 4 h | ~9% |
-| Repair calls that were real faults | 46 / 46 |
-| Inspection calls that were real faults | 63 / 64 |
+| Line inspected by drones in 4 h | ~38 of 198 km |
+| Hypothetical faults per storm | 6.0 |
+| Faults sent to inspection/repair within 4 h | ~10% |
+| Repair calls that were real faults | 45 / 45 |
+| Inspection calls that were real faults | 69 / 71 |
 
 The decisions are reliable: almost no crew is sent for nothing. Coverage is limited by the 3 h charge, not by the logic. The levers are:
 1. **More drones, or a swap battery** instead of a 3 h charge (2 sorties per 4 h is the binding limit).
 2. **Faster confirmation:** a second channel in the same pass. A thermal + visual agreement immediately reaches the repair threshold.
-3. **Crews on priors:** for high-consequence lines no drone will reach in time (for example LINE_024, dead, 27 km), send a crew directly once P x consequence passes the inspection cost.
+3. **Crews on priors:** for high-consequence lines no drone will reach in time (in the example, the dead 27 km LINE_024), send a crew directly once P x consequence passes the inspection cost.

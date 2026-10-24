@@ -1,19 +1,31 @@
-# Base placement: 5 bases, 15 km radius
+# Base placement: K bases, radius R, any grid
 
-Picks 5 base points so that their 15 km circles cover as much of the grid's lines as possible. Works on any LineString GeoJSON.
+Picks K base points so that circles of radius R cover as much power line as possible, weighted by fault risk. Works on any LineString/MultiLineString GeoJSON in any region. Nothing in the code refers to a specific grid; every assumption is in [`common/config.json`](../common/config.json).
 
-- `place_bases.py`: coverage of line length (maximal covering location problem), greedy search plus 1-swap improvement. Once everything is covered, a second stage moves the bases closer to the lines (p-median), which leaves more of each 8 km sortie for inspection. `--on-line` keeps bases on a line (a sensor recharges on a live line), and `--prob-field` weights each line by its fault probability (Bayesian search).
-- `seasonal_bases.py` + `seasonal_config.json`: fault risk per season (crosswind, ice, vegetation, lightning, heat sag). Draws one plan per season plus a fixed all-year plan (expected risk, multi-start search). The multipliers are **assumptions**: the package has no seasonal fault data. Dead lines (`LINE_024`) cannot host a base.
-- `maps/`: the resulting SVG maps; `maps/index.html` shows all five side by side.
+- `place_bases.py`: coverage of line length (maximal covering location problem), greedy search plus 1-swap improvement. Once everything is covered, a second stage moves the bases closer to the lines (p-median), which leaves more of each sortie for inspection.
+  - `--on-line` keeps bases on a line (a sensor recharges on a live line).
+  - `--prob-field` weights each line by a fault probability stored in the data (Bayesian search).
+- `seasonal_bases.py`: fault risk per season (crosswind against the season's wind, ice on single circuits, vegetation on lower-voltage lines, lightning on the highest voltage, heat sag on long lines). It draws one plan per season and one fixed all-year plan (expected risk, multi-start search).
+  - **Voltage classes are relative to the input grid**, so a 22 kV distribution grid and a 400 kV transmission grid are both handled.
+  - **The map frame is computed from the data.**
+  - **Lines reported as de-energised in the scenario files cannot host a base.** They are detected from report text, not from a list of IDs.
+- `../common/grid_io.py`: the generic input layer.
+  - **Schema:** field names are tried from the `schema` section of the config. Lengths are computed from the geometry, and volts are converted to kV.
+  - **Context areas and reports:** read from any `*.geojson` / `*.json` in the data folder.
+  - **Missing files:** if nodes, context or reports are absent, everything degrades to neutral values.
 
 ```sh
-python3 -I placement/place_bases.py data/grid_segments.geojson -k 5 -r 15 --on-line --step-km 0.1 --grid-km 0.2
-python3 -I placement/seasonal_bases.py --segments data/grid_segments.geojson --nodes data/grid_nodes.geojson --out-dir placement/maps
+python3 -I placement/place_bases.py path/to/lines.geojson -k 5 -r 15 --on-line
+python3 -I placement/seasonal_bases.py --data path/to/data_folder -k 5 -r 15 --out-dir placement/maps
 ```
 
-Result: 197.9 of 197.9 km covered in every season. The seasonal plans differ from the all-year plan by no more than ~2 km, so one fixed set of bases is enough; the seasonal risk only sets the order in which lines are inspected.
+`tests/test_generic.py` runs the full pipeline on a random grid in another country, with another schema and no node or context files, to keep it generic.
 
-## Maps
+The season multipliers and wind directions are regional climate assumptions, not tuned values. Replace them with local outage statistics.
+
+## Example: the challenge package (Bavaria, 198 km, 5 bases, 15 km)
+
+All five plans cover 197.9 of 197.9 km. The seasonal plans differ from the all-year plan by no more than a few km, so one fixed set of bases is enough there; the seasonal risk only sets the order in which lines are inspected. LINE_024 is excluded as a base site because a report says it was de-energised.
 
 Coverage, 5 bases (no seasonal weights):
 
