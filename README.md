@@ -13,3 +13,11 @@ open index.html
 - `placement/`: placement of 5 bases with a 15 km radius (coverage, seasonal risk, maps); see `placement/README.md`.
 
 All sensor readings in the walkthrough are hypothetical. Grid data © OpenStreetMap contributors, ODbL 1.0.
+
+## Drone concept: half-propeller de-icer
+
+![Line drone with half-propeller de-icer](docs/images/line-drone-deicer.jpeg)
+
+AI-generated concept render (Gemini): inline-skate wheels roll the package along the conductor while a shrouded half propeller above the cable breaks ice off ahead of it, charging from the live line as it crawls.
+
+![Labelled concept sketch](docs/images/drone-concept-sketch.png)
