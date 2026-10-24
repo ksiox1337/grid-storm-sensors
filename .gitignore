@@ -2,3 +2,5 @@
 __pycache__/
 .env
 data/
+bench/out/*
+!bench/out/report.html

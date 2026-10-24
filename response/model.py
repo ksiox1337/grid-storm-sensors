@@ -112,7 +112,11 @@ def decide(c, cfg):
     return "need more evidence", f"P={c['p']:.2f}"
 
 
-def plan_sortie(drone, cells, cfg, t_h):
+def default_value(c):
+    return c["p"] * c["cons"]
+
+
+def plan_sortie(drone, cells, cfg, t_h, value=default_value):
     """Bayesian search step: the run of adjacent open cells on one line with the highest expected
     consequence-weighted detection, reachable and ending on a live line within the flight budget."""
     L = cfg["limits"]; budget = L["flight_min"] - L["reserve_min"]
@@ -135,7 +139,7 @@ def plan_sortie(drone, cells, cfg, t_h):
                 minutes = 60 * (ferry_in + math.dist(end, land)) / L["cruise_kmh"] + 60 * km / L["inspect_kmh"]
                 if minutes > budget: break
                 # the charge dwarfs flight time, so a sortie is the scarce unit: value per sortie, tiny tie-break on time
-                score = sum(x["p"] * x["cons"] * drone["pd"] for x in run) - 1e-4 * minutes
+                score = sum(value(x) * drone["pd"] for x in run) - 1e-4 * minutes
                 if best is None or score > best[0]:
                     best = (score, list(run), land, minutes, ferry_in)
     return best
@@ -163,15 +167,17 @@ def apply_reading(cell, reading, pd, channel, cells, cfg):
     return before
 
 
-def simulate(cells, bases, cfg, window_h, seed, log=print):
+def simulate(cells, bases, cfg, window_h, seed, log=print, value=default_value, truth=None):
+    """value: search priority per cell (default P x consequence); truth: fault cell ids (default: drawn from the prior)."""
     rng = random.Random(seed); L = cfg["limits"]; pd = cfg["sensors"]["detect_prob"]
-    truth = {c["id"] for c in cells if rng.random() < c["p0"]}  # hypothetical faults drawn from the prior
+    if truth is None:
+        truth = {c["id"] for c in cells if rng.random() < c["p0"]}  # hypothetical faults drawn from the prior
     drones = [dict(name=f"D{i+1}", xy=b, ready=0.0, pd=pd, sorties=0) for i, b in enumerate(bases)]
     budget = L["flight_min"] - L["reserve_min"]
     while True:
         d = min(drones, key=lambda x: x["ready"]); t = d["ready"]
         if t + L["flight_min"] / 60 > window_h: break
-        best = plan_sortie(d, cells, cfg, t)
+        best = plan_sortie(d, cells, cfg, t, value)
         if not best: d["ready"] = 1e9; continue
         _, run, land, minutes, ferry = best
         d["sorties"] += 1
