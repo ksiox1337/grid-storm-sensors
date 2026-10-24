@@ -331,7 +331,8 @@ function render(t) {
     const circ = 2 * Math.PI * 16;
     o.ring.setAttribute("stroke-dasharray", ds.mode === "charge" ? `${circ * ds.prog} ${circ}` : `0 ${circ}`);
     o.halo.setAttribute("r", ds.mode === "inspect" ? 22 + 4 * Math.sin(t * 8) : 16); });
-  trailEls.forEach((p, i) => { const s = sorties[i]; p.setAttribute("opacity", m >= s.t0 * 60 ? (m <= s.tEnd ? .9 : .25) : 0); });
+  const inMission = sc.id === "mission" || sc.id === "outcome";
+  trailEls.forEach((p, i) => { const s = sorties[i]; p.setAttribute("opacity", inMission && m >= s.t0 * 60 ? (m <= s.tEnd ? .9 : .25) : 0); });
   // side panel (re-render only when content changes)
   let html;
   if (sc.id === "grid") html = sideGrid();
