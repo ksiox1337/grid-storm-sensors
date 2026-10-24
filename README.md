@@ -9,7 +9,6 @@
 | | |
 |---|---|
 | 🎞 **Demo video** (40 s, one full mission) | [docs/media/storm_drone_response.mp4](docs/media/storm_drone_response.mp4) |
-| 📑 **Slides** | [PowerDrone.pdf](PowerDrone.pdf) |
 | 📋 **Answers to the brief, point by point** | [SUBMISSION.md](SUBMISSION.md) |
 | 🔧 **Full technical reference** | [docs/SYSTEM.md](docs/SYSTEM.md) |
 
@@ -179,7 +178,6 @@ python3 -I tests/test_generic.py                                       # runs on
 |---|---|
 | `SUBMISSION.md` | the brief, answered point by point |
 | `docs/SYSTEM.md` | full technical reference |
-| `PowerDrone.pdf` | presentation slides |
 | `common/` | input layer + every assumption (`config.json`) |
 | `ml/` | ML imputation, learned risk model, JEV report classifier |
 | `placement/` | base placement and seasonal risk maps |
