@@ -133,7 +133,8 @@ const sorties = D.trace.map((s, i) => {
 const reads = sorties.flatMap(s => s.reads).sort((a, b) => a.t - b.t);
 // variable-speed mission clock: slow while any drone flies, fast while all charge
 const flying = m => sorties.some(s => m >= s.t0 * 60 - 1 && m <= s.tEnd + 1);
-const SLOW = 0.42, FAST = 0.012, cum = [0];
+const SPEED = 2;  // playback speed multiplier for all scenes
+const SLOW = 0.42 / SPEED, FAST = 0.012 / SPEED, cum = [0];
 for (let m = 0; m < WIN; m++) cum.push(cum[m] + (flying(m + .5) ? SLOW : FAST));
 const MISSION_LEN = cum[WIN];
 const animToMin = a => { if (a <= 0) return 0; if (a >= MISSION_LEN) return WIN;
@@ -142,10 +143,10 @@ const animToMin = a => { if (a <= 0) return 0; if (a >= MISSION_LEN) return WIN;
 
 // ---------- scenes ----------
 const SC = [
-  { id: "grid", name: "1 · Grid", dur: 7 }, { id: "reports", name: "2 · Storm & reports", dur: 4 + 2.2 * D.reports.length },
-  { id: "risk", name: "3 · Risk", dur: 7 }, { id: "fleet", name: "4 · How many drones", dur: 8 },
-  { id: "bases", name: "5 · Bases", dur: 6 }, { id: "mission", name: "6 · Mission", dur: MISSION_LEN + 1 },
-  { id: "outcome", name: "7 · Outcome", dur: 10 }];
+  { id: "grid", name: "1 · Grid", dur: 7 / SPEED }, { id: "reports", name: "2 · Storm & reports", dur: (4 + 2.2 * D.reports.length) / SPEED },
+  { id: "risk", name: "3 · Risk", dur: 7 / SPEED }, { id: "fleet", name: "4 · How many drones", dur: 8 / SPEED },
+  { id: "bases", name: "5 · Bases", dur: 6 / SPEED }, { id: "mission", name: "6 · Mission", dur: MISSION_LEN + 1 / SPEED },
+  { id: "outcome", name: "7 · Outcome", dur: 10 / SPEED }];
 let acc = 0; SC.forEach(s => { s.t0 = acc; acc += s.dur; }); const TOTAL = acc;
 const steps = $("steps"); SC.forEach(s => { const d = document.createElement("div"); d.className = "step";
   d.innerHTML = `<div class="fill"></div><span>${s.name}</span>`; d.onclick = () => { T = s.t0 + .01; }; steps.appendChild(d); s.el = d; });
@@ -282,9 +283,9 @@ function render(t) {
     if (o.dead) o.dead.setAttribute("opacity", clamp((gu - .7) * 4));
     if (o.imp) o.imp.setAttribute("opacity", sc.id === "grid" ? .55 * clamp((gu - .55) * 4) * (0.6 + .4 * Math.sin(t * 4)) : 0); });
   // storm and reports
-  const ru = sceneU("reports"), nRep = D.reports.length, repIdx = Math.floor(clamp((t - SC[1].t0 - 3) / 2.2, 0, nRep - .001));
+  const ru = sceneU("reports"), nRep = D.reports.length, repIdx = Math.floor(clamp((t - SC[1].t0 - 3 / SPEED) / (2.2 / SPEED), 0, nRep - .001));
   if (stormPoly) stormPoly.setAttribute("opacity", after("reports") ? clamp(ru * 6) * (sc.id === "mission" || sc.id === "outcome" ? .35 : 1) : 0);
-  reportEls.forEach((o, i) => { const on = after("reports") && t >= SC[1].t0 + 3 + i * 2.2;
+  reportEls.forEach((o, i) => { const on = after("reports") && t >= SC[1].t0 + (3 + i * 2.2) / SPEED;
     const pulse = sc.id === "reports" && i === repIdx ? 1 + .25 * Math.sin(t * 6) : 1;
     o.g.setAttribute("opacity", on ? (sc.id === "reports" ? (i === repIdx ? 1 : .45) : (sc.id === "risk" ? .5 : .18)) : 0);
     o.p.setAttribute("stroke-width", 1.6 * pulse); });
@@ -321,7 +322,7 @@ function render(t) {
   // side panel (re-render only when content changes)
   let html;
   if (sc.id === "grid") html = sideGrid();
-  else if (sc.id === "reports") html = sideReports(after("reports") && t >= SC[1].t0 + 3 ? repIdx : 0);
+  else if (sc.id === "reports") html = sideReports(after("reports") && t >= SC[1].t0 + 3 / SPEED ? repIdx : 0);
   else if (sc.id === "risk") html = sideRisk();
   else if (sc.id === "fleet") html = sideFleet(Math.round(u * 40) / 40);
   else if (sc.id === "bases") html = sideBases();
