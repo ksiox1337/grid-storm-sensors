@@ -12,3 +12,19 @@ python3 -I placement/seasonal_bases.py --segments data/grid_segments.geojson --n
 ```
 
 Result: 197.9 of 197.9 km covered in every season. The seasonal plans differ from the all-year plan by no more than ~2 km, so one fixed set of bases is enough; the seasonal risk only sets the order in which lines are inspected.
+
+## Maps
+
+Coverage, 5 bases (no seasonal weights):
+
+![Coverage](maps/bases_map.svg)
+
+All-year plan (fixed bases, expected seasonal risk):
+
+![All-year](maps/bases_all-year.svg)
+
+| Winter | Spring |
+|---|---|
+| ![Winter](maps/bases_winter.svg) | ![Spring](maps/bases_spring.svg) |
+| **Summer** | **Autumn** |
+| ![Summer](maps/bases_summer.svg) | ![Autumn](maps/bases_autumn.svg) |
