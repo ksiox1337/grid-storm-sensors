@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Storm Drone Response</title>
+<style>
+:root{--bg:#0d0f12;--panel:#14171c;--panel2:#1a1e24;--border:#262b33;--t1:#f2f1ee;--t2:#a9adb5;--t3:#6d727b;
+--line:#3a404a;--line380:#5b6370;--risk:#ff8a3d;--storm:#3987e5;--d1:#3987e5;--d2:#9085e9;--d3:#e87ba4;--d4:#1baf7a;--d5:#eda100;
+--repair:#ff5f5f;--inspect:#f2b33d;--clear:#2fbf8f;--unclear:#8b93a1;--accent:#3987e5}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--t1)}
+#stage{position:absolute;width:1920px;height:1080px;left:50%;top:50%;transform-origin:center;background:var(--bg);overflow:hidden}
+#map{position:absolute;left:0;top:0;width:1280px;height:1000px}
+#side{position:absolute;left:1280px;top:0;width:640px;height:1000px;background:var(--panel);border-left:1px solid var(--border);padding:44px 44px 0 40px}
+#bar{position:absolute;left:0;top:1000px;width:1920px;height:80px;background:#0a0c0f;border-top:1px solid var(--border);display:flex;align-items:center;padding:0 28px;gap:22px}
+.kicker{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:44px;line-height:1.08;font-weight:750;margin:10px 0 14px;letter-spacing:-.01em}
+.lead{font-size:20px;line-height:1.45;color:var(--t2)}
+.cards{margin-top:26px;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel2);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.card .h{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-weight:650;margin-bottom:6px}
+.big{font-size:40px;font-weight:750;letter-spacing:-.01em}.big small{font-size:18px;color:var(--t2);font-weight:500;margin-left:6px}
+.row{display:flex;gap:12px}.row>.card{flex:1}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.04em}
+.p-repair{background:rgba(255,95,95,.16);color:var(--repair)}.p-inspect{background:rgba(242,179,61,.16);color:var(--inspect)}
+.p-clear{background:rgba(47,191,143,.14);color:var(--clear)}.p-more{background:rgba(139,147,161,.16);color:#c3c8d0}
+.p-strong{background:rgba(255,95,95,.16);color:var(--repair)}.p-weak{background:rgba(242,179,61,.16);color:var(--inspect)}
+.p-unclear{background:rgba(139,147,161,.16);color:#c3c8d0}.p-clearr{background:rgba(47,191,143,.14);color:var(--clear)}
+.log{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.log .e{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--t2);background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 12px}
+.log .e b{color:var(--t1);font-weight:650}
+.eq{font-size:21px;line-height:1.6}.eq .v{color:var(--t1);font-weight:700}.eq .o{color:var(--t3)}
+.bar-k{display:flex;align-items:flex-end;gap:10px;height:200px;margin-top:8px}
+.steps{display:flex;gap:6px;flex:1}
+.step{flex:1;height:34px;border-radius:8px;background:#151920;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--t3);font-weight:600;cursor:pointer;position:relative;overflow:hidden}
+.step .fill{position:absolute;left:0;top:0;bottom:0;background:rgba(57,135,229,.22)}
+.step span{position:relative}
+.step.on{color:var(--t1);border-color:#3b4656}
+#clock{font-size:26px;font-weight:750;min-width:150px}
+button{background:#1b2027;border:1px solid var(--border);color:var(--t1);border-radius:10px;height:40px;padding:0 16px;font-size:15px;font-weight:650;cursor:pointer}
+.legend{position:absolute;left:36px;bottom:24px;display:flex;gap:18px;font-size:14px;color:var(--t2);background:rgba(13,15,18,.82);padding:10px 14px;border-radius:12px;border:1px solid var(--border)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:7px;vertical-align:-1px}
+.maptitle{position:absolute;left:36px;top:30px;font-size:15px;color:var(--t2);letter-spacing:.06em;text-transform:uppercase;font-weight:650}
+.note{font-size:13px;color:var(--t3);margin-top:14px;line-height:1.5}
+svg text{font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+</style></head><body>
+<div id="stage">
+  <svg id="map" viewBox="0 0 1280 1000" style="overflow:hidden"></svg>
+  <div class="maptitle" id="maptitle"></div>
+  <div class="legend" id="legend"></div>
+  <div id="side"></div>
+  <div id="bar">
+    <button id="play">❚❚ Pause</button>
+    <div id="clock" class="mono">T+0:00</div>
+    <div class="steps" id="steps"></div>
+  </div>
+</div>
+<script>
+const D = /*TRACE*/null;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const fmtP = p => p < 0.01 ? p.toFixed(3) : p.toFixed(2);
+const DRONE_COL = ["var(--d1)", "var(--d2)", "var(--d3)", "var(--d4)", "var(--d5)"];
+
+// ---------- projection (fit lines + base circles) ----------
+const lat0 = D.cells.reduce((s, c) => s + c.ll[1], 0) / D.cells.length;
+const KX = 111.32 * Math.cos(lat0 * Math.PI / 180), KY = 110.57;
+const R = D.params.radius_km;
+let pts = D.lines.flatMap(l => l.coords);
+D.bases.forEach(b => pts.push(b));
+const minX = Math.min(...pts.map(p => p[0] * KX)), maxX = Math.max(...pts.map(p => p[0] * KX));
+const minY = Math.min(...pts.map(p => p[1] * KY)), maxY = Math.max(...pts.map(p => p[1] * KY));
+const MW = 1280, MH = 1000, PAD = 90;
+const S = Math.min((MW - 2 * PAD) / (maxX - minX), (MH - 2 * PAD - 40) / (maxY - minY));
+const OX = (MW - (maxX - minX) * S) / 2, OY = (MH - (maxY - minY) * S) / 2 + 10;
+const P = ll => [OX + (ll[0] * KX - minX) * S, OY + (maxY - ll[1] * KY) * S];
+const kmDist = (a, b) => Math.hypot((a[0] - b[0]) * KX, (a[1] - b[1]) * KY);
+const path = coords => coords.map((c, i) => (i ? "L" : "M") + P(c).map(v => v.toFixed(1)).join(",")).join(" ");
+
+// ---------- static layers ----------
+const svg = $("map");
+const defs = el("defs", {}, svg);
+const glow = el("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%" }, defs);
+el("feGaussianBlur", { stdDeviation: "6", result: "b" }, glow);
+const fm = el("feMerge", {}, glow); el("feMergeNode", { in: "b" }, fm); el("feMergeNode", { in: "SourceGraphic" }, fm);
+const gStorm = el("g", {}, svg), gReports = el("g", {}, svg), gCircles = el("g", {}, svg), gLines = el("g", {}, svg),
+      gCells = el("g", {}, svg), gPaths = el("g", {}, svg), gBases = el("g", {}, svg), gDrones = el("g", {}, svg), gFx = el("g", {}, svg);
+
+const stormPoly = D.storm ? el("path", { d: path(D.storm) + "Z", fill: "rgba(57,135,229,.07)", stroke: "rgba(57,135,229,.55)", "stroke-width": 2, "stroke-dasharray": "8 6" }, gStorm) : null;
+const reportEls = D.reports.map(r => {
+  const g = el("g", {}, gReports);
+  const p = el("path", { d: path(r.poly) + "Z", fill: "rgba(144,133,233,.10)", stroke: "rgba(144,133,233,.8)", "stroke-width": 1.6 }, g);
+  const xs = r.poly.map(q => P(q)[0]), ys = r.poly.map(q => P(q)[1]);
+  const wide = (Math.max(...xs) - Math.min(...xs)) > 0.6 * (MW - 2 * PAD);
+  if (wide) p.setAttribute("fill", "none");
+  else { const t = el("text", { x: Math.min(...xs) + 6, y: Math.min(...ys) + 18, "font-size": 14, "font-weight": 700, fill: "#c9c3ff" }, g); t.textContent = r.id.replace(/^SYN_/, "").replace("REPORT_", "R"); }
+  return { g, p, r };
+});
+const lineEls = D.lines.map(l => {
+  const len = l.coords.reduce((s, c, i) => i ? s + Math.hypot(...P(c).map((v, j) => v - P(l.coords[i - 1])[j])) : 0, 0);
+  const e = el("path", { d: path(l.coords), fill: "none", stroke: l.kv >= 300 ? "var(--line380)" : "var(--line)", "stroke-width": l.kv >= 300 ? 4 : 2.6,
+    "stroke-linecap": "round", "stroke-dasharray": len, "stroke-dashoffset": len }, gLines);
+  let dead = null;
+  if (l.dead) dead = el("path", { d: path(l.coords), fill: "none", stroke: "var(--repair)", "stroke-width": 2.2, "stroke-dasharray": "3 7", opacity: 0 }, gLines);
+  let imp = null;
+  if (Object.keys(l.imputed || {}).length) imp = el("path", { d: path(l.coords), fill: "none", stroke: "#2fbf8f", "stroke-width": 7, opacity: 0, "stroke-linecap": "round" }, gLines);
+  return { l, e, len, dead, imp };
+});
+const pmax = Math.max(...D.cells.map(c => c.p0 * c.cons));
+const cellEls = {};
+D.cells.forEach(c => { const [x, y] = P(c.ll); cellEls[c.id] = { c, dot: el("circle", { cx: x, cy: y, r: 0, fill: "var(--risk)", opacity: 0 }, gCells), x, y }; });
+const circleEls = D.bases.map((b, i) => { const [x, y] = P(b);
+  return { ring: el("circle", { cx: x, cy: y, r: 0, fill: "rgba(57,135,229,.05)", stroke: "rgba(57,135,229,.45)", "stroke-width": 1.5 }, gCircles), x, y, i }; });
+const baseEls = D.bases.map((b, i) => { const [x, y] = P(b); const g = el("g", { opacity: 0 }, gBases);
+  el("rect", { x: x - 11, y: y - 11, width: 22, height: 22, rx: 5, fill: "#0d0f12", stroke: "#f2f1ee", "stroke-width": 2.5 }, g);
+  const t = el("text", { x, y: y + 5, "text-anchor": "middle", "font-size": 13, "font-weight": 800, fill: "#f2f1ee" }, g); t.textContent = "B" + (i + 1);
+  return g; });
+
+// ---------- mission timeline from the trace ----------
+const L = D.params.limits, WIN = D.window_h * 60;
+const sorties = D.trace.map((s, i) => {
+  const di = +s.drone.slice(1) - 1;
+  const legs = [s.start, ...s.cells.map(c => c.ll), s.land];
+  const spd = legs.slice(1).map((_, j) => (j === 0 || j === legs.length - 2) ? L.cruise_kmh : L.inspect_kmh);
+  const raw = legs.slice(1).map((q, j) => kmDist(legs[j], q) / spd[j] * 60);
+  const tot = raw.reduce((a, b) => a + b, 0) || 1, sc = s.minutes / tot;
+  const tm = [s.t0 * 60]; raw.forEach(m => tm.push(tm[tm.length - 1] + m * sc));
+  const reads = s.cells.map((c, j) => ({ ...c, t: tm[j + 1], drone: s.drone, di, sortie: i }));
+  return { ...s, di, legs, tm, reads, tEnd: tm[tm.length - 1], tCharge: tm[tm.length - 1] + L.charge_h * 60 };
+});
+const reads = sorties.flatMap(s => s.reads).sort((a, b) => a.t - b.t);
+// variable-speed mission clock: slow while any drone flies, fast while all charge
+const flying = m => sorties.some(s => m >= s.t0 * 60 - 1 && m <= s.tEnd + 1);
+const SLOW = 0.42, FAST = 0.012, cum = [0];
+for (let m = 0; m < WIN; m++) cum.push(cum[m] + (flying(m + .5) ? SLOW : FAST));
+const MISSION_LEN = cum[WIN];
+const animToMin = a => { if (a <= 0) return 0; if (a >= MISSION_LEN) return WIN;
+  let lo = 0, hi = WIN; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= a) lo = mid; else hi = mid; }
+  return lo + (a - cum[lo]) / (cum[lo + 1] - cum[lo]); };
+
+// ---------- scenes ----------
+const SC = [
+  { id: "grid", name: "1 · Grid", dur: 7 }, { id: "reports", name: "2 · Storm & reports", dur: 4 + 2.2 * D.reports.length },
+  { id: "risk", name: "3 · Risk", dur: 7 }, { id: "fleet", name: "4 · How many drones", dur: 8 },
+  { id: "bases", name: "5 · Bases", dur: 6 }, { id: "mission", name: "6 · Mission", dur: MISSION_LEN + 1 },
+  { id: "outcome", name: "7 · Outcome", dur: 10 }];
+let acc = 0; SC.forEach(s => { s.t0 = acc; acc += s.dur; }); const TOTAL = acc;
+const steps = $("steps"); SC.forEach(s => { const d = document.createElement("div"); d.className = "step";
+  d.innerHTML = `<div class="fill"></div><span>${s.name}</span>`; d.onclick = () => { T = s.t0 + .01; }; steps.appendChild(d); s.el = d; });
+
+// ---------- dynamic layers ----------
+const droneEls = sorties.length ? [...new Set(sorties.map(s => s.di))].sort().map(di => { const g = el("g", { opacity: 0 }, gDrones);
+  const halo = el("circle", { r: 18, fill: DRONE_COL[di], opacity: .18 }, g);
+  const ring = el("circle", { r: 16, fill: "none", stroke: DRONE_COL[di], "stroke-width": 3, "stroke-dasharray": "0 200", transform: "rotate(-90)" }, g);
+  el("circle", { r: 9, fill: DRONE_COL[di], stroke: "#0d0f12", "stroke-width": 3 }, g);
+  const t = el("text", { x: 14, y: -14, "font-size": 15, "font-weight": 800, fill: DRONE_COL[di] }, g); t.textContent = "D" + (di + 1);
+  return { di, g, ring, halo }; }) : [];
+const trailEls = sorties.map(s => el("path", { d: path(s.legs), fill: "none", stroke: DRONE_COL[s.di], "stroke-width": 3, opacity: 0, "stroke-linecap": "round", "stroke-linejoin": "round" }, gPaths));
+const badgeEls = {};
+
+function cellState(m) {
+  const st = {}; D.cells.forEach(c => st[c.id] = { p: c.p0, status: "open", last: null });
+  for (const r of reads) { if (r.t > m) break;
+    st[r.id] = { p: r.p_after, status: r.status, last: r };
+    for (const n in r.neighbours) if (st[n] && st[n].status === "open") st[n].p = r.neighbours[n]; }
+  return st;
+}
+function droneState(di, m) {
+  const mine = sorties.filter(s => s.di === di); let pos = D.bases[di], mode = "base", prog = 0;
+  for (const s of mine) {
+    if (m < s.t0 * 60) break;
+    if (m <= s.tEnd) { for (let j = 1; j < s.tm.length; j++) if (m <= s.tm[j]) { const u = (m - s.tm[j - 1]) / ((s.tm[j] - s.tm[j - 1]) || 1);
+        const a = s.legs[j - 1], b = s.legs[j]; pos = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u]; mode = (j === 1 || j === s.tm.length - 1) ? "ferry" : "inspect"; break; }
+      return { pos, mode, s }; }
+    pos = s.land; mode = m < s.tCharge ? "charge" : "ready"; prog = clamp((m - s.tEnd) / (L.charge_h * 60));
+  }
+  return { pos, mode, prog };
+}
+
+// ---------- side panels ----------
+const side = $("side");
+function header(k, t, lead) { return `<div class="kicker">${k}</div><h1>${t}</h1><p class="lead">${lead}</p>`; }
+const totalKm = D.total_km, dead = D.lines.filter(l => l.dead).map(l => l.id), imp = D.imputation.circuits || {};
+const kv = [...new Set(D.lines.map(l => l.kv).filter(Boolean))].sort((a, b) => a - b);
+function sideGrid() {
+  return header("Step 1 · Input", "The grid", "Real overhead lines from the challenge package. Any GeoJSON grid works: field names, units and missing data are normalised automatically.") +
+  `<div class="cards"><div class="row"><div class="card"><div class="h">Lines</div><div class="big">${D.lines.length}<small>${totalKm.toFixed(0)} km</small></div></div>
+  <div class="card"><div class="h">Voltage levels</div><div class="big">${kv.join(" / ")}<small>kV</small></div></div></div>
+  <div class="card"><div class="h">ML · missing data</div><div style="font-size:18px;line-height:1.5"><b style="color:#2fbf8f">${imp.filled || 0}</b> of ${imp.missing || 0} missing <span class="mono">circuits</span> values filled by a random forest
+  <div style="color:var(--t2);font-size:15px;margin-top:4px">${imp.note || ""} · only filled at ≥ 70% confidence</div></div></div>
+  <div class="card"><div class="h">Dead line from a report</div><div style="font-size:18px"><span class="pill p-repair">${dead.join(", ") || "none"}</span>
+  <span style="color:var(--t2);margin-left:8px">de-energised → no landing, no charging</span></div></div></div>`;
+}
+function sideReports(i) {
+  const r = D.reports[Math.min(i, D.reports.length - 1)];
+  const j = r.jev ? `<div style="font-size:18px;margin-top:10px">JEV <span class="mono" style="color:var(--t3)">${r.jev.model}</span> →
+     <b>${r.jev.top.replace(/_/g, " ")}</b> ${(r.jev.p * 100).toFixed(0)}%</div>
+     <div style="font-size:18px;margin-top:4px">about the grid at all: <b>${(r.jev.grid * 100).toFixed(0)}%</b></div>` : `<div style="font-size:18px;margin-top:10px">keyword rule</div>`;
+  return header("Step 2 · Live evidence", "Storm & reports", "Each field report is classified by <b>JEV</b> (online) into a hazard class, then turned into a likelihood ratio for every line inside its area.") +
+  `<div class="cards"><div class="card"><div class="h">${r.id} · confidence ${String(r.confidence).split(/[;,]| for /)[0]}</div>
+  <div style="font-size:17px;color:var(--t2);line-height:1.45">“${r.text}”</div>${j}
+  <div class="eq" style="margin-top:10px">evidence strength <span class="v">LR = ${r.lr.toFixed(2)}</span></div></div>
+  <div class="log">${D.reports.slice(0, i + 1).map(q => `<div class="e"><b>${q.id.replace("SYN_", "")}</b>${q.jev ? q.jev.top.replace(/_/g, " ") : q.type}<span style="margin-left:auto" class="mono">LR ${q.lr.toFixed(2)}</span></div>`).join("")}</div></div>`;
+}
+function sideRisk() {
+  const top = [...D.cells].sort((a, b) => b.p0 * b.cons - a.p0 * a.cons).slice(0, 5);
+  return header("Step 3 · Model", "Fault risk per km", "Every line is cut into 1 km cells. Prior = background rate × storm exposure × season × report evidence. Priority = P(fault) × consequence.") +
+  `<div class="cards"><div class="card"><div class="eq">P = 1 − e<sup>−λ·km</sup> <span class="o">·</span> odds × LR<sub>reports</sub><br>priority = P × consequence</div></div>
+  <div class="card"><div class="h">Top cells</div>${top.map(c => `<div style="display:flex;justify-content:space-between;font-size:17px;padding:4px 0"><span class="mono">${c.id}</span><span>P ${fmtP(c.p0)} × ${c.cons.toFixed(1)}</span></div>`).join("")}</div>
+  <div class="note">Background rate: hand-set config prior, or a Poisson model learned from fault history (ml/risk_model.py).</div></div>`;
+}
+function sideFleet(u) {
+  const rows = D.fleet.rows, mx = Math.max(...rows.map(r => r.net + r.se)), mn = Math.min(0, ...rows.map(r => r.net - r.se));
+  const best = rows.reduce((a, b) => b.net > a.net ? b : a), H = 210, Wb = 46;
+  const y = v => H - (v - mn) / (mx - mn) * H;
+  const bars = rows.map((r, i) => { const show = clamp(u * rows.length * 1.3 - i);
+    const x = 10 + i * (Wb + 8), chosen = r.k === D.fleet.k;
+    return `<rect x="${x}" y="${Math.min(y(r.net * show), y(0))}" width="${Wb}" height="${Math.abs(y(r.net * show) - y(0))}" rx="5" fill="${chosen ? "#3987e5" : "#2b323d"}"/>
+      <line x1="${x + Wb / 2}" x2="${x + Wb / 2}" y1="${y((r.net + r.se) * show)}" y2="${y((r.net - r.se) * show)}" stroke="#6d727b" stroke-width="2"/>
+      <text x="${x + Wb / 2}" y="${H + 22}" text-anchor="middle" font-size="15" fill="${chosen ? "#f2f1ee" : "#6d727b"}" font-weight="${chosen ? 800 : 500}">${r.k}</text>`; }).join("");
+  const band = u > .8 ? `<rect x="6" width="${rows.length * (Wb + 8) + 4}" y="${y(best.net)}" height="${y(best.net - best.se) - y(best.net)}" fill="rgba(57,135,229,.12)"/>` : "";
+  return header("Step 4 · Before launch", "How many drones?", "For each fleet size K: place bases, simulate 100 storms, value = faults found × consequence × outage cost − drone cost.") +
+  `<div class="cards"><div class="card"><div class="h">Net value per event (± 1 SE) vs K</div>
+  <svg viewBox="0 0 ${10 + rows.length * (Wb + 8)} ${H + 30}" style="width:100%;height:250px">${band}<line x1="0" x2="1000" y1="${y(0)}" y2="${y(0)}" stroke="#3a404a"/>${bars}</svg></div>
+  <div class="card" style="opacity:${clamp((u - .75) * 5)}"><div class="h">Decision · one-standard-error rule</div><div class="big">K = ${D.fleet.k}<small>smallest K within 1 SE of the best (K = ${best.k})</small></div></div></div>`;
+}
+function sideBases() {
+  return header("Step 5 · Before launch", `${D.bases.length} bases, ${R} km radius`, "Maximal covering location on live lines (greedy + swaps), then pulled closer to the risk (p-median) so more of every sortie is spent inspecting.") +
+  `<div class="cards"><div class="row"><div class="card"><div class="h">Line covered</div><div class="big">${(D.coverage * 100).toFixed(0)}%</div></div>
+  <div class="card"><div class="h">Sortie</div><div class="big">${L.flight_min}<small>min · ≤ 8 km inspected</small></div></div>
+  <div class="card"><div class="h">Charge</div><div class="big">${L.charge_h}<small>h · on a live line</small></div></div></div>
+  <div class="card"><div class="h">Bases</div>${D.bases.map((b, i) => `<div class="mono" style="font-size:16px;padding:3px 0">B${i + 1} &nbsp; ${b[1].toFixed(4)}, ${b[0].toFixed(4)}</div>`).join("")}</div></div>`;
+}
+function sideMission(m, st) {
+  const done = reads.filter(r => r.t <= m), last = done[done.length - 1];
+  const sortiesFlown = sorties.filter(s => s.t0 * 60 <= m).length, km = new Set(done.map(r => r.id)).size;
+  const calls = Object.values(st).filter(s => s.status === "repair" || s.status === "physical inspection").length;
+  const LR = { strong: 8, weak: 2, unclear: 1, clear: 1 - D.params.sensors.detect_prob };
+  let focus = `<div class="card"><div class="h">Waiting for the first reading</div><div style="color:var(--t2);font-size:17px">Drones fly to the highest P × consequence × detection they can reach and still land on a live line within ${L.flight_min - L.reserve_min} min.</div></div>`;
+  if (last) {
+    const o0 = last.p_before / (1 - last.p_before), o1 = last.p_after / (1 - last.p_after);
+    const cls = { repair: "p-repair", "physical inspection": "p-inspect", cleared: "p-clear" }[last.status] || "p-more";
+    const rc = { strong: "p-strong", weak: "p-weak", unclear: "p-unclear", clear: "p-clearr" }[last.reading];
+    focus = `<div class="card"><div class="h">${last.drone} · ${last.id} · ${last.channel}</div>
+    <div style="font-size:19px;margin-bottom:8px">reading <span class="pill ${rc}">${last.reading.toUpperCase()}</span></div>
+    <div class="eq">odds ${o0.toFixed(3)} <span class="o">×</span> LR ${LR[last.reading].toFixed(2)} <span class="o">=</span> ${o1.toFixed(3)}<br>
+    P <span class="v">${fmtP(last.p_before)} → ${fmtP(last.p_after)}</span></div>
+    <div style="margin-top:10px;font-size:18px">decision <span class="pill ${cls}">${last.status.toUpperCase()}</span></div>
+    <div style="color:var(--t2);font-size:15px;margin-top:6px">${last.why}</div></div>`;
+  }
+  const ev = done.filter(r => r.reading !== "clear" || r.status !== "cleared").slice(-5).reverse().map(r => {
+    const cls = { repair: "p-repair", "physical inspection": "p-inspect", cleared: "p-clear" }[r.status] || "p-more";
+    return `<div class="e"><b style="color:${DRONE_COL[r.di]}">${r.drone}</b><span class="mono">${r.id}</span>${r.reading}<span style="margin-left:auto" class="pill ${cls}">${r.status === "physical inspection" ? "INSPECT" : r.status.toUpperCase()}</span></div>`; }).join("");
+  return header("Step 6 · Mission", "Bayesian search", "Every pass updates the odds. A finding pulls the next drone back with another sensor; nothing found lowers P and the search moves on.") +
+  `<div class="cards"><div class="row"><div class="card"><div class="h">Sorties</div><div class="big">${sortiesFlown}</div></div>
+  <div class="card"><div class="h">Cells read</div><div class="big">${km}</div></div><div class="card"><div class="h">Crew calls</div><div class="big">${calls}</div></div></div>
+  ${focus}<div class="log">${ev}</div></div>`;
+}
+function sideOutcome(st) {
+  const by = s => Object.entries(st).filter(([, v]) => v.status === s).map(([k]) => k);
+  const rep = by("repair"), ins = by("physical inspection"), clr = by("cleared"), more = by("need more evidence");
+  const found = D.truth.filter(t => rep.includes(t) || ins.includes(t));
+  return header("Step 7 · Result", "Who goes where", `After ${D.window_h} h and ${sorties.length} sorties (3 h charge each): crews are sent only where the evidence holds.`) +
+  `<div class="cards"><div class="row"><div class="card"><div class="h">Repair</div><div class="big" style="color:var(--repair)">${rep.length}</div><div class="mono" style="font-size:14px;color:var(--t2)">${rep.join(", ")}</div></div>
+  <div class="card"><div class="h">Inspect</div><div class="big" style="color:var(--inspect)">${ins.length}</div><div class="mono" style="font-size:14px;color:var(--t2)">${ins.join(", ")}</div></div></div>
+  <div class="row"><div class="card"><div class="h">Cleared</div><div class="big" style="color:var(--clear)">${clr.length}</div></div><div class="card"><div class="h">Need evidence</div><div class="big">${more.length}</div></div></div>
+  <div class="card"><div class="h">Simulated ground truth</div><div style="font-size:18px">${D.truth.length} hidden faults · <b>${found.length}</b> sent to a crew · every crew call was a real fault: <b>${(rep.length + ins.length) === found.length ? "yes" : "no"}</b></div></div>
+  <div class="note">Over 200 simulated storms: 96–100% of crew calls are real faults. The bottleneck is charging: a 15-min battery swap lifts faults found in 4 h from 7% to 49%.</div></div>`;
+}
+
+// ---------- render(t): everything is a pure function of the animation clock ----------
+let lastSide = "";
+function render(t) {
+  const sc = SC.findLast(s => t >= s.t0) || SC[0], u = clamp((t - sc.t0) / sc.dur);
+  SC.forEach(s => { s.el.classList.toggle("on", s === sc); s.el.firstChild.style.width = (s === sc ? u * 100 : t > s.t0 + s.dur ? 100 : 0) + "%"; });
+  const after = id => t >= SC.find(s => s.id === id).t0, sceneU = id => { const s = SC.find(q => q.id === id); return clamp((t - s.t0) / s.dur); };
+  // lines draw in
+  const gu = sceneU("grid");
+  lineEls.forEach((o, i) => { const k = clamp(gu * 1.6 - i / lineEls.length * .6); o.e.setAttribute("stroke-dashoffset", o.len * (1 - ease(k)));
+    if (o.dead) o.dead.setAttribute("opacity", clamp((gu - .7) * 4));
+    if (o.imp) o.imp.setAttribute("opacity", sc.id === "grid" ? .55 * clamp((gu - .55) * 4) * (0.6 + .4 * Math.sin(t * 4)) : 0); });
+  // storm and reports
+  const ru = sceneU("reports"), nRep = D.reports.length, repIdx = Math.floor(clamp((t - SC[1].t0 - 3) / 2.2, 0, nRep - .001));
+  if (stormPoly) stormPoly.setAttribute("opacity", after("reports") ? clamp(ru * 6) * (sc.id === "mission" || sc.id === "outcome" ? .35 : 1) : 0);
+  reportEls.forEach((o, i) => { const on = after("reports") && t >= SC[1].t0 + 3 + i * 2.2;
+    const pulse = sc.id === "reports" && i === repIdx ? 1 + .25 * Math.sin(t * 6) : 1;
+    o.g.setAttribute("opacity", on ? (sc.id === "reports" ? (i === repIdx ? 1 : .45) : (sc.id === "risk" ? .5 : .18)) : 0);
+    o.p.setAttribute("stroke-width", 1.6 * pulse); });
+  // cells
+  const m = sc.id === "mission" ? animToMin(t - sc.t0) : after("outcome") ? WIN : 0;
+  const st = cellState(m), riskU = sceneU("risk");
+  D.cells.forEach((c, i) => { const o = cellEls[c.id], s = st[c.id];
+    const appear = after("risk") ? clamp(riskU * 2.2 - (i / D.cells.length) * .9) : 0;
+    const v = clamp(s.p * c.cons / pmax);
+    let fill = "var(--risk)", r = 2 + 7 * Math.sqrt(v), op = (.25 + .75 * v) * appear;
+    if (s.status === "cleared") { fill = "var(--clear)"; r = 4; op = .85 * appear; }
+    if (s.status === "repair") { fill = "var(--repair)"; r = 13; op = appear; }
+    if (s.status === "physical inspection") { fill = "var(--inspect)"; r = 12; op = appear; }
+    o.dot.setAttribute("r", r.toFixed(1)); o.dot.setAttribute("fill", fill); o.dot.setAttribute("opacity", op.toFixed(2));
+    o.dot.setAttribute("filter", (s.status === "repair" || s.status === "physical inspection") ? "url(#glow)" : "");
+    const want = s.status === "repair" || s.status === "physical inspection";
+    if (want && !badgeEls[c.id]) { const g = el("g", {}, gFx); const lab = s.status === "repair" ? "REPAIR" : "INSPECT", w = lab.length * 10 + 18;
+      el("rect", { x: o.x + 16, y: o.y - 30, width: w, height: 26, rx: 13, fill: s.status === "repair" ? "var(--repair)" : "var(--inspect)" }, g);
+      const tx = el("text", { x: o.x + 16 + w / 2, y: o.y - 12, "text-anchor": "middle", "font-size": 14, "font-weight": 800, fill: "#0d0f12" }, g); tx.textContent = lab;
+      badgeEls[c.id] = g; }
+    if (!want && badgeEls[c.id]) { badgeEls[c.id].remove(); delete badgeEls[c.id]; } });
+  // bases and circles
+  const bu = sceneU("bases");
+  circleEls.forEach(o => o.ring.setAttribute("r", after("bases") ? R * S * ease(clamp(bu * 2 - o.i * .15)) : 0));
+  baseEls.forEach((g, i) => g.setAttribute("opacity", after("bases") ? clamp(bu * 3 - i * .3) : 0));
+  gCircles.setAttribute("opacity", sc.id === "mission" || sc.id === "outcome" ? .45 : 1);
+  // drones, trails, reading pings
+  droneEls.forEach(o => { if (!(sc.id === "mission" || sc.id === "outcome")) { o.g.setAttribute("opacity", 0); return; }
+    const ds = droneState(o.di, m), [x, y] = P(ds.pos); o.g.setAttribute("opacity", 1); o.g.setAttribute("transform", `translate(${x},${y})`);
+    const circ = 2 * Math.PI * 16;
+    o.ring.setAttribute("stroke-dasharray", ds.mode === "charge" ? `${circ * ds.prog} ${circ}` : `0 ${circ}`);
+    o.halo.setAttribute("r", ds.mode === "inspect" ? 22 + 4 * Math.sin(t * 8) : 16); });
+  trailEls.forEach((p, i) => { const s = sorties[i]; p.setAttribute("opacity", m >= s.t0 * 60 ? (m <= s.tEnd ? .9 : .25) : 0); });
+  // side panel (re-render only when content changes)
+  let html;
+  if (sc.id === "grid") html = sideGrid();
+  else if (sc.id === "reports") html = sideReports(after("reports") && t >= SC[1].t0 + 3 ? repIdx : 0);
+  else if (sc.id === "risk") html = sideRisk();
+  else if (sc.id === "fleet") html = sideFleet(Math.round(u * 40) / 40);
+  else if (sc.id === "bases") html = sideBases();
+  else if (sc.id === "mission") html = sideMission(m, st);
+  else html = sideOutcome(st);
+  if (html !== lastSide) { side.innerHTML = html; lastSide = html; }
+  // map title, legend, clock
+  $("maptitle").textContent = { grid: "Challenge package · real lines", reports: "Storm footprint and report areas", risk: "Prior fault risk × consequence",
+    fleet: "Prior fault risk × consequence", bases: "Bases and coverage", mission: "Mission · live", outcome: "Mission · result" }[sc.id];
+  $("legend").innerHTML = (after("risk") ? `<span><i style="background:var(--risk)"></i>fault risk</span>` : `<span><i style="background:var(--line380)"></i>380 kV</span><span><i style="background:var(--line)"></i>110 kV</span>`) +
+    `<span><i style="background:var(--repair)"></i>${after("mission") ? "repair" : "dead line"}</span>` + (after("mission") ? `<span><i style="background:var(--inspect)"></i>inspect</span><span><i style="background:var(--clear)"></i>cleared</span>` : `<span><i style="background:#2fbf8f"></i>ML-filled</span>`) +
+    (after("reports") ? `<span><i style="background:#9085e9"></i>report area</span>` : "");
+  const mm = Math.floor(m); $("clock").textContent = `T+${Math.floor(mm / 60)}:${String(mm % 60).padStart(2, "0")}`;
+  $("clock").style.opacity = after("mission") ? 1 : .35;
+}
+
+// ---------- playback ----------
+let T = 0, playing = true, prev = null;
+window.renderAt = s => { T = s; render(T); };
+window.TOTAL = TOTAL;
+$("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "❚❚ Pause" : "▶ Play"; };
+document.addEventListener("keydown", e => {
+  if (e.code === "Space") { e.preventDefault(); $("play").click(); }
+  const i = SC.findLastIndex(s => T >= s.t0);
+  if (e.code === "ArrowRight") T = SC[Math.min(i + 1, SC.length - 1)].t0 + .01;
+  if (e.code === "ArrowLeft") T = SC[Math.max(i - 1, 0)].t0 + .01; });
+function fit() { const k = Math.min(innerWidth / 1920, innerHeight / 1080); $("stage").style.transform = `translate(-50%,-50%) scale(${k})`; }
+addEventListener("resize", fit); fit();
+function loop(ts) { if (prev !== null && playing && !window.FRAME_MODE) T = (T + (ts - prev) / 1000) % TOTAL; prev = ts; if (!window.FRAME_MODE) render(T); requestAnimationFrame(loop); }
+render(0); requestAnimationFrame(loop);
+</script></body></html>

@@ -200,8 +200,9 @@ def apply_reading(cell, reading, pd, channel, cells, cfg):
     return before
 
 
-def simulate(cells, bases, cfg, window_h, seed, log=print, value=default_value, truth=None):
-    """value: search priority per cell (default P x consequence); truth: fault cell ids (default: drawn from the prior)."""
+def simulate(cells, bases, cfg, window_h, seed, log=print, value=default_value, truth=None, trace=None):
+    """value: search priority per cell (default P x consequence); truth: fault cell ids (default: drawn from the prior);
+    trace: optional list that receives one record per sortie (for visualisation)."""
     rng = random.Random(seed); L = cfg["limits"]; pd = cfg["sensors"]["detect_prob"]
     if truth is None:
         truth = {c["id"] for c in cells if rng.random() < c["p0"]}  # hypothetical faults drawn from the prior
@@ -218,11 +219,21 @@ def simulate(cells, bases, cfg, window_h, seed, log=print, value=default_value, 
         log(f"\n**T+{t:.2f} h, {d['name']} sortie {d['sorties']}**: fly {ferry:.1f} km to {run[0]['seg']} cells "
             f"{run[0]['k']+1}-{run[-1]['k']+1} ({sum(c['len'] for c in run):.1f} km), {minutes:.0f} of {budget} min used, "
             f"lands on {'the same line' if run[-1]['live'] else 'nearest live line (target is dead)'}.")
+        rec = None
+        if trace is not None:
+            rec = dict(drone=d["name"], t0=t, minutes=minutes, start=tuple(d["xy"]), land=tuple(land), seg=run[0]["seg"],
+                       cells=[], score=_)
+            trace.append(rec)
         for c in run:
             ch = rng.choice(cfg["sensors"]["channels"])
             reading = reading_for(c, truth, d["pd"], rng)
+            nb_before = {n["id"]: n["p"] for n in cells if n["seg"] == c["seg"] and abs(n["k"] - c["k"]) == 1}
             before = apply_reading(c, reading, d["pd"], ch, cells, cfg)
             c["status"], why = decide(c, cfg)
+            if rec is not None:
+                rec["cells"].append(dict(id=c["id"], channel=ch, reading=reading, p_before=before, p_after=c["p"],
+                                         status=c["status"], why=why, fault=c["id"] in truth,
+                                         neighbours={n["id"]: n["p"] for n in cells if n["id"] in nb_before}))
             if reading != "clear" or c["status"] != "cleared":
                 log(f"- {c['id']}: {ch} reading **{reading}**, P {before:.2f} -> {c['p']:.2f} => **{c['status']}** ({why})")
         cleared = sum(1 for c in run if c["status"] == "cleared")
