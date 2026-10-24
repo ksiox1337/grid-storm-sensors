@@ -298,13 +298,16 @@
     "min_coverage": 0.95
   },
   "ml": {
-    "_how": "impute: fill missing line fields with a classifier (ml/impute.py). risk_model: path to a model trained by ml/risk_model.py; when set it replaces the hand-set background prior. report_classifier: 'keywords' (offline) or 'jev' (online, needs JEV_API_KEY and JEV_URL).",
+    "_how": "impute: fill missing line fields with a classifier (ml/impute.py). risk_model: path to a model trained by ml/risk_model.py; when set it replaces the hand-set background prior. report_classifier: 'keywords' (offline) or 'jev' (online, needs TYPESAFE_API_KEY; base URL from JEV_URL or jev_base_url).",
     "impute": true,
     "impute_fields": [
       "circuits"
     ],
     "impute_min_prob": 0.7,
     "risk_model": null,
-    "report_classifier": "keywords"
+    "report_classifier": "keywords",
+    "jev_base_url": "https://api.typesafe.ai",
+    "jev_model": "jev-latest",
+    "jev_timeout_s": 10
   }
 }

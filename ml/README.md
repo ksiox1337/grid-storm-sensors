@@ -4,7 +4,7 @@
 |---|---|---|
 | `impute.py` | Missing line fields (for example `circuits`) from the lines where the field is present (random forest, cross-validated) | On by default (`ml.impute`). Only fills a gap when confidence ≥ 0.7; filled values are marked as imputed |
 | `risk_model.py` | Background fault rate per km per storm from a fault history (Poisson GLM or gradient boosting, chosen by leave-one-grid-out deviance) | Used once a model is trained and `ml.risk_model` points to it; until then the hand-set prior from the config is used |
-| `report_classifier.py` | Free-text report → hazard class probabilities → likelihood ratio | `keywords` (offline) or `jev` (online, `JEV_API_KEY` + `JEV_URL`). The JEV request format is a guess until their API is documented; any error falls back to keywords |
+| `report_classifier.py` | Free-text report → hazard class probabilities → likelihood ratio | `keywords` (offline) or `jev` (online: `POST https://api.typesafe.ai/v1/systemone`, key in `TYPESAFE_API_KEY`); any error falls back to keywords |
 
 ```sh
 python3 -I ml/risk_model.py train --pair DATA_FOLDER history.csv --out ml/risk_model.joblib   # history.csv: segment_id,events,faults
@@ -30,3 +30,22 @@ python3 -I ml/risk_model.py demo --maps DATA1 DATA2 ... --e2e 200               
 Most of the gain in faults found comes from **calibration**, not ranking. The hand prior underestimated the fault rate 2–5× (mean P / true 0.19–0.46). The learned one is close (0.52–1.56), so evidence reaches the decision thresholds sooner, and precision stays at 96–99%.
 
 How large the gain is depends on how wrong the hand prior is. Here that gap was chosen by me, so real history is needed for real numbers.
+
+## Connecting JEV
+
+1. Create a key at console.typesafe.ai/keys. Per third-party reports, new signups were paused on 2026-09-22; Vercel AI Gateway is the documented alternative.
+2. Set the key in your shell, never in the repo:
+```sh
+export TYPESAFE_API_KEY=...
+```
+3. Check the key:
+```sh
+python3 -I ml/report_classifier.py check
+```
+4. Compare JEV with the keyword rule on the package reports:
+```sh
+python3 -I ml/report_classifier.py classify --data DATA_FOLDER
+```
+5. Turn it on: set `"report_classifier": "jev"` in `common/config.json`.
+
+`JEV_URL` points it at a gateway (for example LiteLLM or Zuplo) instead of `api.typesafe.ai`.
